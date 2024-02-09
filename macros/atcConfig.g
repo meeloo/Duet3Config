@@ -21,10 +21,8 @@ global atcOriginX = {move.axes[0].min + 24}  ; X position of the first pocket's 
 global atcOriginY = {move.axes[1].max - 24}  ; Y position of the first pocket's center
 
 ; Compute the X and Y offsets to go from slot to slot, depending on the global parameters (alignement, offset and direction)
-if global.Alignement == 0 
-    global atcOffsetX = 0  ; X Offset from pocket to pocket
-    global atcOffsetY = global.atcOffset * global.atcDirection ; Y Offset from pocket to pocket
-else
-    global atcOffsetX = global.atcOffset * global.atcDirection  ; X Offset from pocket to pocket
-    global atcOffsetY = 0 ; Y Offset from pocket to pocket
+global atcAlignmentX = {1 - global.atcAlignment}
+global atcAlignmentY = {global.atcAlignment}
+global atcOffsetX = {global.atcOffset * global.atcDirection * global.atcAlignmentX} ; X Offset from pocket to pocket
+global atcOffsetY = {global.atcOffset * global.atcDirection * global.atcAlignmentY} ; Y Offset from pocket to pocket
 
