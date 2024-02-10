@@ -14,6 +14,7 @@ M98 P"config-axes-endstops.g"
 M98 P"config-probe.g"
 M98 P"config-spindle.g"
 M98 P"config-laser.g"
+M98 P"atcConfig.g"
 
 ; Other Settings
 M453 ; Put the machine into CNC Modes
