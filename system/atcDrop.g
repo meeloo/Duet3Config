@@ -11,7 +11,6 @@ G90 ; Absolute positioning
 G94 ; Feed Rate Mode (Units per Minute)
 G17 ; Select XY plane for arc moves
 G21 ; Set units to millimeters
-G53 ; Use machine coordinate system
 
 G53 G0 Z{global.atc.RetractZ} ; Fast move to Z 50
 G53 G0 X{global.atcOriginX + global.atcOffsetX * param.S} Y{global.atcOriginY + global.atcOffsetY * param.S} ; Fast move to the origin of the ATC

@@ -15,6 +15,10 @@ global atcPickupEndZ = 0
 global atcPickupRPM = 1400
 global atcPickupFeed = 1800
 
+;global atcProbeSlot = 7 ; Uncomment this line if the Z probe is installed in a slot of the ATC. Otherwise set the position of the probe in the next two lines:
+global atcProbeX = 24
+global atcProbeY = 300
+
 global atcRetractZ = move.axes[2].max  ; Z position to go to when a tool is loaded in the spindle (probably maxZ to make sure we don't hit anything with the end mill)
 
 global atcOriginX = {move.axes[0].min + 24}  ; X position of the first pocket's center
@@ -26,3 +30,6 @@ global atcAlignmentY = {global.atcAlignment}
 global atcOffsetX = {global.atcOffset * global.atcDirection * global.atcAlignmentX} ; X Offset from pocket to pocket
 global atcOffsetY = {global.atcOffset * global.atcDirection * global.atcAlignmentY} ; Y Offset from pocket to pocket
 
+if {exists(global.atcProbeSlot)}
+    set global.atcProbeX = {global.atcOriginX + global.atcOffsetX * global.atcProbeSlot}
+    set global.atcProbeY = {global.atcOriginY + global.atcOffsetY * global.atcProbeSlot}
