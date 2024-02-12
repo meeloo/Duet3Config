@@ -23,3 +23,59 @@ G53 G0 Z{global.atcRetractZ} 					; Raise Head
 M291 P"Probing complete. Tool Offset Updated." R"Success" S1    ; screen message
 
 M5 ; Spindle Off
+
+
+
+
+
+
+
+;------------------------------------------- OTHER VERSION
+M208 Z8 S1 ; Set axis max travel
+ 
+G53 G90 G0 X321.0 Y0.0 ; Use machine coordinates with absolute positioning and go to given XY
+ 
+if !exists(global.MGlobalsLoaded)
+	M98 P"/macros/Measuring/globals.g"
+	
+;M558 P1 C"io7.in" H23.258 F{global.MSpeedFast,global.MSpeedLow}	
+ 
+M558 F{global.MSpeedFast} K1 ; Set Z probe type for probe 1
+ 
+M300 S300 P1000 ; Play beep sound
+if state.currentTool = -1
+    M291 S0 T5 P"Probing the spindle zero height" ; Display message and optionally wait for response
+else
+	if global.HSpindle <= -9999
+		abort S"Please set the spindle zero first"
+	M291 S0 T5 P"Probing the tool " ^ state.currentTool ^" offset" ;  Display message and optionally wait for response
+ 
+ 
+M558 F{global.MSpeedFast} K1
+ 
+G30 S-1 K1
+G53 G1 Z{move.axes[2].machinePosition+2} H4
+ 
+M558 F{global.MSpeedLow} K1
+G30 S-1 K1
+ 
+ 
+if state.currentTool = -1
+  G92 Z{sensors.probes[1].diveHeight}  
+  set global.HSpindle = sensors.probes[1].diveHeight
+  set global.MResultZ = sensors.probes[1].diveHeight
+  M208 Z30 S1
+else
+	M400
+	echo "Probe triggered at Z:" ^ move.axes[2].machinePosition ^" Sensor height: " ^ sensors.probes[1].diveHeight
+	var ToolLen = move.axes[2].machinePosition - sensors.probes[1].diveHeight
+	set global.MResultZ = - var.ToolLen
+	M98 P"/sys/tool_set.g" T{state.currentTool} O{global.MResultZ}
+	
+	; Set soft limit to 0 plane
+	M208 Z{var.ToolLen} S1
+	
+ 
+ 
+M558 F{global.MSpeedFast} K1
+G53 G1 Z{move.axes[2].max - 10} H4
