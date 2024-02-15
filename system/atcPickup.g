@@ -1,5 +1,10 @@
 ; RapidChangeATC pickup macro
 echo "Pickup tool #" ^ {param.S}
+
+if {global.atcEnabled = false}
+	echo "ATC Disabled - skipping pickup"
+	M99
+
 if {!exists(param.S)}
 	echo "This macro expects an S parameter"
 	M99

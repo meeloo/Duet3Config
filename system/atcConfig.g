@@ -1,4 +1,5 @@
 ;RapidChange globals:
+global atcEnabled = false
 global atcDirection = 1 ; -1 or 1 depending on the direction to go from tool 0 to tool N
 global atcAlignment = 1 ; 0 = along X, 1 = along Y
 global atcOffset = 38 ; Offset from slot to slot for your particular ATC. ER11 ATCs have 38 mm offsets

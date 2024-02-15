@@ -1,5 +1,10 @@
-echo "ATC Droping tool #" ^ {param.S}
 ; RapidChangeATC drop macro
+echo "ATC Droping tool #" ^ {param.S}
+
+if {global.atcEnabled = false}
+	echo "ATC Disabled - skipping drop"
+	M99
+
 if {!exists(param.S)}
 	echo "This macro expects an S parameter"
 	M99
