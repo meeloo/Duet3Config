@@ -41,7 +41,7 @@ while {var.count > 0}
 		G53 G1 Y{var.minY} F{var.feed}
 	set var.direction = {!var.direction}
 	
-	set var.posX = {min(var.maxX, iterations * var.advance + var.minX)}
+	set var.posX = {min(var.maxX, (iterations + 1) * var.advance + var.minX)}
 	echo "Advance X to " ^ {var.posX}
 	G53 G1 X{var.posX}
 	set var.count = var.count - 1
