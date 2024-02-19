@@ -50,9 +50,9 @@ properties = {
   dwellInSeconds: true, // specifies the unit for dwelling: true:seconds and false:milliseconds.
   useDustCollector: false, // specifies if M7 and M9 are output for dust collector
   useRigidTapping: "whitout", // output rigid tapping block
-  homeOnToolChange: true,  //homes all axis after tool is changed and before it is potentailly probed
-  probeToolOnChange: true, // probes a tool after changed in with by calling /macros/Tool Probe Auto
-  manualToolChange: true, //Asks for manual tool change and program is interrupted until tool change is confirmed.
+  homeOnToolChange: false,  //homes all axis after tool is changed and before it is potentailly probed
+  probeToolOnChange: false, // probes a tool after changed in with by calling /macros/Tool Probe Auto
+  manualToolChange: false, //Asks for manual tool change and program is interrupted until tool change is confirmed.
   waitForSpindle: 5 // Wait 5 seconds for spindle to start. 0 = do not wait. -1 = request user confirmation before moving on
 };
 
@@ -599,7 +599,7 @@ function onSection() {
       } else if (properties.waitForSpindle == 0) {
         // don't wait at all
       } else {
-        writeBlock(mFormat.format(4) + " S" + properties.waitForSpindle);
+        onDwell(properties.waitForSpindle);
       }
     }
   }
@@ -709,7 +709,7 @@ function onDwell(seconds) {
     warning(localize("Dwelling time is out of range."));
   }
   if (properties.dwellInSeconds) {
-    writeBlock(gFormat.format(4), "P" + secFormat.format(seconds));
+    writeBlock(gFormat.format(4), "S" + secFormat.format(seconds));
   } else {
     milliseconds = clamp(1, seconds * 1000, 99999999);
     writeBlock(gFormat.format(4), "P" + milliFormat.format(milliseconds));
