@@ -28,7 +28,7 @@ M4 S{global.atcDropRPM} ; Spindle On, Counterclockwise 1400 RPM
 G4 S{global.atcSpindlePause} ; Pause for 2 s
 
 G53 G1 Z{global.atcDropEndZ} F{global.atcDropFeed} ; Move to Z 0 1800mm per minute
-G53 G1 Z{global.atcDropStartZ} ; Fast move to Z engage position
+G53 G0 Z{global.atcDropStartZ} F{global.atcDropFeed} ; Fast move to Z engage position
 
 M400
 M5 ; Spindle Off
