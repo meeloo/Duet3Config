@@ -9,7 +9,7 @@ if {!exists(param.S)}
 	echo "This macro expects an S parameter"
 	M99
 	
-if {param.S >= global.atcCount}
+if {param.S > global.atcCount}
 	echo "Requested tool index too big"
 	M99
 
@@ -27,7 +27,7 @@ M3 S{global.atcPickupRPM} ; Spindle On, Clockwise 1400 RPM
 G4 S{global.atcSpindlePause} ; Pause for 2 s
 
 G53 G1 Z{global.atcPickupEndZ} F{global.atcPickupFeed} ; Move to Z 0 1800mm/minute
-G53 G0 Z{global.atcPickupEndZ + 8} ; Fast Move to Z+8
+G53 G1 Z{global.atcPickupEndZ + global.atcPickupReengage} ; Fast Move to Z + reengage
 
 G4 S0.25 ; Pause for 0.25s
 
