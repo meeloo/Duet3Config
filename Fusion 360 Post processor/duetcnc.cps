@@ -107,7 +107,7 @@ var coolants = {
 var permittedCommentChars = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,=_-";
 
 var nFormat = createFormat({ prefix: "N", decimals: 0 });
-var gFormat = createFormat({ prefix: "G", decimals: 1 });
+var gFormat = createFormat({ prefix: "G", decimals: 1,  minDigitsLeft:1});
 var mFormat = createFormat({ prefix: "M", decimals: 0 });
 var hFormat = createFormat({ prefix: "H", decimals: 0 });
 var pFormat = createFormat({ prefix: "P", decimals: (unit == MM ? 3 : 4), scale: 0.5 });
@@ -610,8 +610,8 @@ function onSection() {
   }
   var workOffset = currentSection.workOffset;
   if (workOffset == 0) {
-    warningOnce(localize("Work offset has not been specified. Using G54 as WCS."), WARNING_WORK_OFFSET);
-    workOffset = 1;
+    warningOnce(localize("Work offset has not been specified. The machine will use whatever work offset is currently selected as WCS."), WARNING_WORK_OFFSET);
+    //workOffset = 1;
   }
   if (workOffset > 0) {
     if (workOffset > 6) {
