@@ -14,6 +14,7 @@ M98 P"config-axes-endstops.g"
 M98 P"config-probe.g"
 M98 P"config-spindle.g"
 M98 P"config-laser.g"
+M98 P"atcConfig.g"
 
 ; Other Settings
 M453 ; Put the machine into CNC Modes
@@ -26,5 +27,3 @@ M911 S21.0 R23 P"G91 G1 Z3 F1000" ; Configure power loss resume
 M98 P"config-user-settings.g"
 
 M501 ; Load Stored Parameters 
-
-M552 I1 S1 ; Then enable Wifi

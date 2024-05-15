@@ -1,0 +1,3 @@
+cd config
+../tools/grr.py -u
+cd ..

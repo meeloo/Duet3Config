@@ -3,6 +3,11 @@ if {global.atcEnabled = false}
 	echo "ATC Disabled - skipping probe"
 	M99
 
+if {global.atcProbingEnabled = false}
+	echo "ATC Probing Disabled - skipping probe"
+	M99
+
+
 M558 K0 P5 C"!io5.in" H5 F500 T500 ; Z Probe for tool length
 
 G21				                    			; make sure we’re in mm

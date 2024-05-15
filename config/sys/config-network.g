@@ -8,13 +8,14 @@
 ; Enable Wifi Module:
 G4 P500 ; wait for 500 milliseconds for the Wifi module to warm up
 ;M552 I1 S0 ; First disable it
-;M587 S"Monsieur Le Comte" P"YourWifiPassword"
+;M587 S"Monsieur Le Comte" P"Thomalouixandriel"
 M552 I1 S1 ; Then enable Wifi
 
 ; Network settings
 M586 P0 S1 ; Enable HTTP
 M586 P1 S0 ; Disable FTP
-M586 P2 S0 R23 ; Disable Telnet
+M586 P2 S1 R23 ; Disable Telnet
+M586 C"*" ; Enable dev mode for DWC (controlling the machine from another webserver)
 
 ; Network machine name
 M550 P"Sebs CNC" ; Set machine name
