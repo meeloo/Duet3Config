@@ -38,9 +38,24 @@ M5 ; Spindle Off
 ; Check for tool drop success:
 G53 G0 Z{global.atcPickupStartZ + 5}
 G4 S1
-if {sensors.gpIn[6].value} = 1
-	M291 R"Tool drop check failed!" P"A tool was found by the IR detector. Cancelling further operations" S2
-	abort "Tool drop check failed!"
+
+var toolStillOn = true
+var loopCounter = 0
+var counter = 0
+
+while {var.toolStillOn}
+	set var.loopCounter = 0
+	set var.counter = 0
+	while var.loopCounter < 10
+		G4 P50 ; Wait for 50 milliseconds
+		set var.loopCounter = iterations
+		set var.counter = {var.counter + sensors.gpIn[6].value}
+		set var.toolStillOn = var.counter < 2
+	if var.toolStillOn == false
+		break ; The tool has been droped, we can bail
+	G53 G0 Z{global.atcRetractZ} ; Fast move to Z 50
+	M291 R"Tool drop check failed!" P"A tool was found by the IR detector. Please remove tool manualy before hitting ok!" S2
+	G53 G0 Z{global.atcPickupStartZ + 5}
 
 G53 G0 Z{global.atcRetractZ} ; Fast Move to Z retract position
 

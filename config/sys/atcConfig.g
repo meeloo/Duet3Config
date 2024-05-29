@@ -2,7 +2,7 @@
 M950 P6 C"io6.out" Q2000 ;M42 P6 S0
 
 ; Define ATC tool detection inpput:
-M950 J6 C"!io7.in" 
+M950 J6 C"^io7.in" 
 
 ;RapidChange globals:
 global atcEnabled = true
@@ -26,7 +26,7 @@ global atcPickupStartZ = 27.5
 global atcPickupEndZ = 10
 global atcPickupReengage = 20
 global atcPickupRPM = {global.atcRPM} ; // beware, the low RPM on the spindle isn't accurate at all
-global atcPickupFeed = 1800
+global atcPickupFeed = 1700
 
 ;global atcProbeSlot = 8 ; Uncomment this line if the Z probe is installed in a slot of the ATC. Otherwise set the position of the probe in the next two lines:
 global atcProbeX = 3
