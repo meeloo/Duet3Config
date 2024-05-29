@@ -13,5 +13,5 @@ M201 X500 Y500 Z200 ; Set accelerations (mm/s^2)
 ;M201 X500.00 Y500.00 Z100.00                       ; set accelerations (mm/s^2)
 ;M566 X500 Y500 Z500 U500 ; Set maximum instantaneous speed changes (mm/min)
 ;M669 K0 X1:0:0:0 Y0:1:1:0 Z0:0:0:1
-M669 K0
+M669 K0 S10 ; Set kinematics type and kinematics parameters. S10 = break move commands to 10 segments per seconds
 M84 S10                                            ; Set idle timeout
