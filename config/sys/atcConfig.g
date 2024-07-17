@@ -18,6 +18,8 @@ global atcDropStartZ = 27.5   ; The Z position to start dropping the tool
 global atcDropEndZ = 10 ; The Z position to stop dropping the tool
 global atcDropFeed = 1800
 
+global atcToolHasBeenDetected = false
+
 global atcRPM = 250 ; the VFD reports 1700 RPM when I ask for 200 RPM and it reports 3800 when I ask for 1700...
 
 global atcDropRPM = {global.atcRPM} ; The spindle RPM to drop the tool

@@ -22,6 +22,7 @@ M98 P"atcOpenDustCover.g"
 
 G53 G0 Z{global.atcRetractZ} ; Fast move to Z 50
 G53 G0 X{global.atcOriginX + global.atcOffsetX * (param.S - 1)} Y{global.atcOriginY + global.atcOffsetY * (param.S - 1)} ; Fast move to the origin of the ATC
+
 G53 G0 Z{global.atcPickupStartZ} ; Fast move to Z pickup position
 
 M400
@@ -42,9 +43,14 @@ M5 ; Spindle Off
 ; Check for tool pickup success:
 G53 G0 Z{global.atcPickupStartZ + 5}
 G4 S1
-if {sensors.gpIn[6].value} = 0
-	M291 R"Tool pickup check failed!" P"A tool was not found by the IR detector. Cancelling further operations" S2
-	abort "Tool pickup check failed!"
+
+M98 P"atcTestToolPresent.g"
+while {!global.atcToolHasBeenDetected}
+	G53 G0 Z{global.atcRetractZ}
+	M291 R"Tool pickup check failed!" P"A tool was NOT found by the IR detector. Mount the tool manualy" S2
+	; Once the user has clicked ok we try to pickup the tool again
+	G53 G0 Z{global.atcPickupStartZ + 5}
+	M98 P"atcTestToolPresent.g"
 
 G53 G0 Z{global.atcRetractZ} ; Fast Move to Z retract position
 
