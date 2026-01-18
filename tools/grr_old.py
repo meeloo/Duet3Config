@@ -305,8 +305,7 @@ def listfiles(db, prefix, folder, token = 0):
         "select digest from file_info where basedir = ? and name = ?",
         (folder,f['name']))]
       existing_digest = None
-      dgst = None  # Initialize to avoid unset variable errors
-      remote_checksum_type, remote_checksum = remote_sha1(prefix, folder + "/" + f['name'])
+      dgst = remote_sha1(prefix, folder + "/" + f['name'])
       overwrite = True
       if len(cur) > 0:
         existing_digest = cur[0]
@@ -315,39 +314,13 @@ def listfiles(db, prefix, folder, token = 0):
           current_digest = digest(folder, f['name'])
 
         if current_digest is not None and current_digest != existing_digest:
-          # Local file was modified - compare with remote
-          # Convert to same checksum type for comparison
-          if remote_checksum_type == 'crc32':
-            local_crc = crc32(folder, f['name'])
-            remote_different = (local_crc != remote_checksum)
-          else:
-            remote_different = (existing_digest != remote_checksum)
-
-          if remote_different:
+          if existing_digest != dgst:
             print("Preserving conflicting local changes in", filepath)
-            dgst = existing_digest # retain local SHA1
-          else:
-            dgst = current_digest
+            dgst = existing_digest # retain preserving conflicting message
           overwrite = False
-        elif current_digest is None:
-          # File doesn't exist locally, need to download
+        elif existing_digest != dgst or current_digest is None:
           print("Refreshing", filepath)
           dgst = download_file(prefix, folder, f['name'])
-        else:
-          # File exists and matches database - check if remote is different
-          if remote_checksum_type == 'crc32':
-            local_crc = crc32(folder, f['name'])
-            if local_crc != remote_checksum:
-              print("Refreshing", filepath)
-              dgst = download_file(prefix, folder, f['name'])
-            else:
-              dgst = existing_digest
-          else:
-            if existing_digest != remote_checksum:
-              print("Refreshing", filepath)
-              dgst = download_file(prefix, folder, f['name'])
-            else:
-              dgst = existing_digest
 
       if os.path.isfile(f['name'] + ".grrtmp"):
         if overwrite:
@@ -415,46 +388,12 @@ def remote_gcode(prefix, gcode):
 
 # this is surprisingly slower than just fetching the files outright  :(
 def remote_sha1(prefix, file, depth=0):
-  # Always drain the reply buffer to clear any stale responses
-  try:
-    urllib.request.urlopen(RRF_REPLY % prefix, timeout=0.5).read()
-  except:
-    pass
-
-  if depth > 0:
-    # Extra delay on retries to give server time to clear
-    time.sleep(0.1)
-
-  response = remote_gcode(prefix, RRF_SHA1_FILE % file)
-
-  # Split by lines and find first valid hex string
-  for line in response.splitlines():
-    checksum = line.strip()
-    # Check if it's a valid hex string
-    if len(checksum) > 0 and all(c in '0123456789abcdefABCDEF' for c in checksum):
-      if len(checksum) == 40:
-        # SHA1 hash
-        return ('sha1', checksum.lower())
-      elif len(checksum) == 8:
-        # CRC32 hash
-        return ('crc32', checksum.lower())
-
-  # Fallback: strip all whitespace and check
-  checksum = ''.join(response.split())
-  if len(checksum) > 0 and all(c in '0123456789abcdefABCDEF' for c in checksum):
-    if len(checksum) == 40:
-      return ('sha1', checksum.lower())
-    elif len(checksum) == 8:
-      return ('crc32', checksum.lower())
-
-  if depth > 1:
-    print(file + ": checksum fetch failing [%s], retrying..." % checksum)
-
-  if depth > 5:
-    # Too many retries, give up and just download the file
-    return ('sha1', "0" * 40)
-
-  return remote_sha1(prefix, file, depth + 1)
+  digest = remote_gcode(prefix, RRF_SHA1_FILE % file).strip()
+  if len(digest) != 40:
+    if depth > 1:
+      print(file + ": digest fetch failing [%s], retrying..." % digest)
+    return remote_sha1(prefix, file, depth + 1)
+  return digest
 
 def crc32(folder, filename):
   # expected as an unsigned value, remove 0x (python3 doesn't have the L)
@@ -474,3 +413,4 @@ def _digest(folder, filename, _digest):
   
 if __name__ == '__main__':
   main()
+

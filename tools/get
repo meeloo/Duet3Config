@@ -1,3 +1,7 @@
 cd config
-../tools/grr.py -m http://192.168.1.40 -d config
+if [ -f .rrf_mirror ]; then
+  ../tools/grr.py -r
+else
+  ../tools/grr.py -m http://sebscnc.local -d .
+fi
 cd ..
