@@ -13,5 +13,7 @@ M563 P6 R0 S"Spindle tool 6"
 M563 P7 R0 S"Spindle tool 7"
 M563 P8 R0 S"Spindle tool 8"
 
+M563 P9 R0 S"Manual Tool 9"
+
 ; Define the out4 to send the forward or reverse commands to the relay:
 ;M950 P1 C"io4.out" Q500

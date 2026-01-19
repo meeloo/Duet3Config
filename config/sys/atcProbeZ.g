@@ -8,7 +8,7 @@ if {global.atcProbingEnabled = false}
 	M99
 
 
-M558 K0 P5 C"!io5.in" H5 F500 T500 ; Z Probe for tool length
+;M558 K0 P5 C"!io5.in" H5 F500 T500 ; Z Probe for tool length
 
 G21				                    			; make sure we’re in mm
 G90   											; Absolute Mode	
@@ -25,4 +25,4 @@ G10 L1 Z{var.newOffset} ; Set Tool offset to the distance in between the current
 G53 G0 Z{global.atcRetractZ} 					; Raise Head
 
 ; Go Back to XYZ Probe
-M558 P5 F500 C"!io3.in" ; XYZ Probe
+;M558 P5 F500 C"!io3.in" ; XYZ Probe

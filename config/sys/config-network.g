@@ -6,10 +6,12 @@
 ;M552 S1 P0.0.0.0 ; Enable Ethernet - Change IP Address to suit
 
 ; Enable Wifi Module:
-G4 P500 ; wait for 500 milliseconds for the Wifi module to warm up
+;G4 P500 ; wait for 500 milliseconds for the Wifi module to warm up
 ;M552 I1 S0 ; First disable it
 ;M587 S"Monsieur Le Comte" P"Thomalouixandriel"
-M552 I1 S1 ; Then enable Wifi
+;M552 I1 S1 ; Then enable Wifi
+M552 S1 P0.0.0.0 ; Enable Ethernet - Change IP Address to suit
+M552 I0 S1 ; Then enable Ethernet
 
 ; Network settings
 M586 P0 S1 ; Enable HTTP

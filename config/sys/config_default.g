@@ -11,4 +11,4 @@ M291 P"Please go to <a href=""https://www.duet3d.com/StartHere"" target=""_blank
 ;    M552 S1
 
 M552 P0.0.0.0 S1
-M552 I1 S1
+M552 I0 S1

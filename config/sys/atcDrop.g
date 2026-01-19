@@ -40,11 +40,11 @@ G53 G0 Z{global.atcPickupStartZ + 5}
 G4 S1
 
 M98 P"atcTestToolPresent.g"
-while {global.atcToolHasBeenDetected}
+if {global.atcToolHasBeenDetected}
 	G53 G0 Z{global.atcRetractZ}
 	M291 R"Tool drop check failed!" P"A tool was found by the IR detector. Please remove tool manualy before hitting ok!" S2
-	G53 G0 Z{global.atcPickupStartZ + 5}
-	M98 P"atcTestToolPresent.g"
+	;G53 G0 Z{global.atcPickupStartZ + 5}
+	;M98 P"atcTestToolPresent.g"
 
 G53 G0 Z{global.atcRetractZ} ; Fast Move to Z retract position
 
