@@ -20,7 +20,7 @@ echo "Start probing Z for current tool from " ^ {move.axes[2].machinePosition}
 M585 Z{-(global.atcRetractZ - global.atcProbeZ)} P0 F500 S1 ; Reach for the probe
 var newOffset = {-(move.axes[2].machinePosition - global.atcProbeZ)}
 echo "Probed tool at " ^ {move.axes[2].machinePosition} ^ " New offset = " ^ {var.newOffset} ^ " (Z Probe height = " ^ {global.atcProbeZ} ^ ")"
-G10 L1 Z{var.newOffset} ; Set Tool offset to the distance in between the current Z position and the probe Z position
+G10 L1 Z{var.newOffset} U{-var.newOffset} ; Set Tool offset to the distance in between the current Z position and the probe Z position. Also update the U axis with the inverse of that offset so that the dust shoe also move accordingly
 
 G53 G0 Z{global.atcRetractZ} 					; Raise Head
 
