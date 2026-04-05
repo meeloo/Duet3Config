@@ -1,15 +1,15 @@
 ; Axes configuration executed by config.g
-M564 H0 ; enable move before homing
+;M564 H0 ; enable move before homing
 
-M584 X0 Y1 Z2 P3 ; Apply drive mapping to axes
+;M584 X0 Y1 Z2 U4 P4 ; Apply drive mapping to axes
 ;M584 P3
-M584 X0.0 Y0.1:0.2 Z0.3                            ; set drive mapping
-M906 X2400 Y2400 Z2400 I50 ; Set motor currents (mA)
-M350 X16 Y16 Z16 I1 ; Configure microstepping
+M584 X0.0 Y0.1:0.2 Z0.3 U0.4                           ; set drive mapping
+M906 X2400 Y2400 Z2400 U1500 I50 ; Set motor currents (mA)
+M350 X16 Y16 Z16 U16 I1 ; Configure microstepping
 ;M203 X7000 Y7000 Z2500 ; Set maximum speeds (mm/min)
-M203 X6000.00 Y6000.00 Z2000.00                  ; set maximum speeds (mm/min)
-M566 X500 Y500 Z50                        ; set maximum instantaneous speed changes (mm/min)
-M201 X250 Y250 Z100 ; Set accelerations (mm/s^2)
+M203 X6000.00 Y6000.00 Z2000.00 U8000.0                  ; set maximum speeds (mm/min)
+M566 X500 Y500 Z50 U1000                       ; set maximum instantaneous speed changes (mm/min)
+M201 X250 Y250 Z100 U500 ; Set accelerations (mm/s^2)
 ;M201 X500.00 Y500.00 Z100.00                       ; set accelerations (mm/s^2)
 ;M566 X500 Y500 Z500 U500 ; Set maximum instantaneous speed changes (mm/min)
 ;M669 K0 X1:0:0:0 Y0:1:1:0 Z0:0:0:1

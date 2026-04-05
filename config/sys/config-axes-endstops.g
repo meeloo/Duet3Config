@@ -5,6 +5,13 @@ M574 Y1 S1 P"io1.in"                               ; configure switch-type (e.g.
 M574 Z2 S1 P"io2.in"                               ; configure switch-type (e.g. microswitch) endstop for high end on Z via pin io2.in
 M574 E1 S1 P"io3.in"                               ; XYZ Probe configure switch-type (e.g. microswitch) endstop for low end via pin io3.in
 
+
+M574 U2 S1 P"io8.in"                               ; DustShoe
+
+;M574 U2 S3
+;M915 U S1 F0 R0
+;M915 U S-10 H200 F2000 R0
+
 ;M574 X1 P"xstop" S1 ; Set active low X endstop
 ;M574 Y1 P"ystop" S1 ; Set active low Y endstop
 ;M574 Z2 P"zstop" S1 ; Set active low Z endstop
