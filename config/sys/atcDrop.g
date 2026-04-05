@@ -20,6 +20,10 @@ G21 ; Set units to millimeters
 
 M98 P"atcOpenDustCover.g"
 
+; Retract dust shoe before ATC operation
+if {exists(global.dustShoeEngaged)}
+	M98 P"dustShoeRetract.g"
+
 G53 G0 Z{global.atcRetractZ} ; Fast move to Z 50
 G53 G0 X{global.atcOriginX + global.atcOffsetX * (param.S - 1)} Y{global.atcOriginY + global.atcOffsetY * (param.S - 1)} ; Fast move to the origin of the ATC
 G53 G0 Z{global.atcDropStartZ} ; Fast move to Z engage position
