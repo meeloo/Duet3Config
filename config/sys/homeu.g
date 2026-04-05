@@ -3,11 +3,11 @@
 
 G91 ; relative positioning
 G21 ; Set units to mm
-G1 H1 U{move.axes[2].max*2} F900 ; move quickly to axis endstop and stop there (first pass)
-G92 U{move.axes[2].max} ; Set Home Position
+G1 H1 U{move.axes[3].max*2} F900 ; move quickly to axis endstop and stop there (first pass)
+G92 U{move.axes[3].max} ; Set Home Position
 G1 U-3 F2400 ; go back a few mm
-G1 H1 U{move.axes[2].max*2} F300 ; move slowly to axis endstop once more (second pass)
-G92 U{move.axes[2].max} ; Set Home Position
+G1 H1 U{move.axes[3].max*2} F300 ; move slowly to axis endstop once more (second pass)
+G92 U{move.axes[3].max} ; Set Home Position
 G90 ; absolute positioning
 
 ;M400 ; Wait for current moves to finish 
