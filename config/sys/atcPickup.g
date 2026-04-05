@@ -54,8 +54,4 @@ while {!global.atcToolHasBeenDetected}
 
 G53 G0 Z{global.atcRetractZ} ; Fast Move to Z retract position
 
-; Re-engage dust shoe after successful tool pickup
-if {exists(global.dustShoeEngaged)}
-	M98 P"dustShoeEngage.g"
-
 M98 P"atcCloseDustCover.g"
