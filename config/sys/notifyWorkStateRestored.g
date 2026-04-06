@@ -1,0 +1,2 @@
+; Show restored work coordinates at startup so user can verify before proceeding
+M291 P{"Work state restored from last save. G54: X=" ^ move.axes[0].workplaceOffsets[0] ^ " Y=" ^ move.axes[1].workplaceOffsets[0] ^ " Z=" ^ move.axes[2].workplaceOffsets[0] ^ " U=" ^ move.axes[3].workplaceOffsets[0] ^ ". Use 'Restore Work State' macro to reload or 'Save Work State' to overwrite."} R"Startup: Work Coordinates" S1 T10

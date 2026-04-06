@@ -27,4 +27,5 @@ M911 S21.0 R23 P"G91 G1 Z3 F1000" ; Configure power loss resume
 ; User Configuration files
 M98 P"config-user-settings.g"
 
-M501 ; Load Stored Parameters 
+M501 ; Load Stored Parameters
+M98 P"notifyWorkStateRestored.g"

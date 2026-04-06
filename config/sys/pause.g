@@ -1,6 +1,7 @@
 ; pause.g
 ; called when a print from SD card is paused
 
+M500 ; save work state before pausing
 G90
 G53 G1 Z{move.axes[2].max} F6000 ; move the Z-Axis to the maximum position
 M5

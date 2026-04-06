@@ -345,6 +345,8 @@ function onOpen() {
   // if (properties.useDustCollector) {
   // writeBlock(mFormat.format(7)); // turns on dust collector
   // }
+
+  writeBlock("M500"); // save work coordinates at job start
 }
 
 function onComment(message) {
