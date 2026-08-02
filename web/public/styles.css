@@ -82,9 +82,13 @@ html, body {
   font-family: var(--sans);
   font-size: 14px;
   overscroll-behavior: none;
+  /* The app owns the viewport. Hunting for a control by scrolling is not
+     something to do while standing at a running machine. */
+  overflow: hidden;
 }
 
-#app { display: flex; flex-direction: column; min-height: 100%; }
+#app { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+cnc-dashboard { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
 button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
 
@@ -194,13 +198,50 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .dashboard {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
-  gap: 10px;
-  padding: 10px;
-  align-content: start;
+  gap: 8px;
+  padding: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
+
+/* Page tabs */
+.pages {
+  display: flex; align-items: center; gap: 4px;
+  padding: 5px 8px; background: var(--bg-panel);
+  border-bottom: 1px solid var(--border); flex: 0 0 auto; flex-wrap: wrap;
+}
+.pages-spacer { flex: 1; }
+.page-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 30px; padding: 4px 10px; font-size: 13px;
+  background: transparent; border-color: transparent; color: var(--text-dim);
+}
+.page-tab:hover { background: var(--bg-raised); }
+.page-tab.active { background: var(--tint-accent); border-color: var(--accent);
+  color: var(--accent); font-weight: 600; }
+.page-key { font-family: var(--mono); font-size: 10px; opacity: 0.65;
+  border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; line-height: 1.4; }
+.page-close { opacity: 0.6; font-size: 11px; padding: 0 2px; }
+.page-close:hover { opacity: 1; color: var(--bad); }
+.page-add { min-height: 30px; padding: 4px 10px; background: transparent;
+  border-color: transparent; color: var(--text-faint); font-size: 16px; }
+.page-add:hover { background: var(--bg-raised); border-color: var(--border); }
+.page-rename { min-height: 30px; padding: 2px 8px; width: 120px; font-size: 13px; }
+.rows-select select { min-height: 28px; padding: 2px 6px; font-size: 11px;
+  background: transparent; border-color: var(--border); }
+.page-empty { grid-column: 1 / -1; display: grid; place-items: center;
+  color: var(--text-faint); font-size: 13px; }
+
+/* Below this width a grid cell cannot hold a useful panel, so the page is
+   allowed to scroll — a phone is not the shop-floor case this is built for. */
 @media (max-width: 900px) {
-  .dashboard { grid-template-columns: 1fr; }
-  .dashboard .panel { grid-column: 1 / -1 !important; }
+  html, body { overflow: auto; }
+  #app { height: auto; min-height: 100dvh; }
+  .dashboard { grid-template-columns: 1fr; grid-template-rows: none !important;
+    overflow: visible; }
+  .dashboard .panel { grid-column: 1 / -1 !important; grid-row: auto !important;
+    min-height: 320px; }
 }
 
 .panel {
@@ -237,22 +278,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .panel-body { flex: 1; overflow: auto; min-height: 0; }
 .panel-body > * { display: block; height: 100%; }
 
-.resize-handle {
-  position: absolute; bottom: 0; left: 0; right: 0; height: 8px;
-  cursor: ns-resize; touch-action: none;
-}
-.resize-handle:hover { background: var(--tint-accent); }
-
-.add-panel {
-  position: fixed; right: 18px; bottom: 18px;
-  width: 48px; height: 48px; border-radius: 50%;
-  font-size: 22px; line-height: 1;
-  background: var(--accent); border-color: var(--accent); color: var(--on-accent);
-  z-index: 50; box-shadow: 0 4px 16px var(--shadow);
-}
-
 .picker {
-  position: fixed; right: 18px; bottom: 78px;
+  position: fixed; right: 18px; top: 96px;
   width: 300px; max-height: 60vh;
   background: var(--bg-raised);
   border: 1px solid var(--border-strong);

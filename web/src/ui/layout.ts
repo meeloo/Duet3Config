@@ -1,10 +1,23 @@
-// Dashboard host: a 12-column grid of panels, reorderable by dragging a
-// header, resizable, and persisted to localStorage.
+// Dashboard host: paged, fixed to the viewport, never scrolls.
 //
-// Deliberately not a full tiling window manager. Panels flow in a grid; each
-// carries a column span and a pixel height. That covers "all on one page with
-// configurable panels" without the complexity of arbitrary docking, and it
-// degrades to a single readable column on a phone or a shop tablet in portrait.
+// Scrolling a dashboard is fine at a desk and wrong at a machine. Standing at
+// the spindle — often one-handed, sometimes in gloves, occasionally in a hurry —
+// a control you have to hunt for by scrolling is a control you don't have. So
+// the app fills the window exactly and splits panels across PAGES you switch
+// between, rather than one long column you scroll.
+//
+// Consequences that fall out of that decision:
+//  - panel height is a ROW SPAN, not pixels: rows divide the available height,
+//    so every page fits whatever window it is given;
+//  - number keys 1-9 switch pages, because on a shop floor a keystroke beats
+//    aiming at a tab;
+//  - panels still scroll internally when their own content overflows. That is
+//    unavoidable (a file listing is arbitrarily long) but it is contained, and
+//    the controls around it never move.
+//
+// Narrow screens are the one exception: below the breakpoint the grid collapses
+// to a single column and the page is allowed to scroll, because a phone-width
+// viewport cannot show a useful panel otherwise.
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
@@ -16,64 +29,139 @@ export interface PanelInstance {
   key: string;
   /** PanelDefinition id. */
   id: string;
+  /** Columns of 12. */
   width: number;
-  height: number;
+  /** Rows spanned within the page's row count. */
+  rows: number;
+}
+
+export interface Page {
+  id: string;
+  name: string;
+  /** How many equal rows this page divides the viewport into. */
+  rows: number;
+  panels: PanelInstance[];
+}
+
+export interface Layout {
+  pages: Page[];
+  active: number;
 }
 
 /**
- * Default dashboard.
+ * Default pages, grouped by what you are doing rather than by what things are.
  *
- * Ordered by how often you look at something while actually working:
- * position and motion first, then the toolpath with the spindle and tool
- * changer beside it, then files and console, then the operation packs.
- *
- * The object-model browser is deliberately absent. It is an advanced
- * diagnostic — genuinely useful, but not something to spend a sixth of the
- * screen on before you have needed it once. It is one click away in the panel
- * picker, and that space goes to the spindle and job instead.
+ * Control is what you look at while jogging and setting up. Job is what you
+ * look at while something is cutting. Setup holds the operation packs, which
+ * you visit deliberately. Advanced holds the object-model browser — a real
+ * diagnostic, but not worth screen space before it has been needed.
  */
-const DEFAULT_LAYOUT: PanelInstance[] = [
-  { key: 'dro-1', id: 'dro', width: 5, height: 360 },
-  // Tall enough for the XY pad, Z column and an aux-axis column without scrolling.
-  { key: 'jog-1', id: 'jog', width: 4, height: 360 },
-  { key: 'job-1', id: 'job', width: 3, height: 360 },
-  { key: 'viewer-1', id: 'viewer', width: 8, height: 560 },
-  // Full height beside the viewer so all eight ATC slots are visible at once.
-  { key: 'spindle-1', id: 'spindle', width: 4, height: 560 },
-  { key: 'console-1', id: 'console', width: 6, height: 420 },
-  { key: 'files-1', id: 'files', width: 6, height: 420 },
-  { key: 'probe-1', id: 'probe', width: 6, height: 520 },
-  { key: 'machining-1', id: 'machining', width: 6, height: 520 },
-];
+const DEFAULT_LAYOUT: Layout = {
+  active: 0,
+  pages: [
+    {
+      id: 'control',
+      name: 'Control',
+      rows: 2,
+      panels: [
+        { key: 'dro-1', id: 'dro', width: 4, rows: 1 },
+        { key: 'jog-1', id: 'jog', width: 4, rows: 1 },
+        // Full height so all eight ATC slots show without scrolling.
+        { key: 'spindle-1', id: 'spindle', width: 4, rows: 2 },
+        { key: 'job-1', id: 'job', width: 4, rows: 1 },
+        { key: 'console-1', id: 'console', width: 4, rows: 1 },
+      ],
+    },
+    {
+      id: 'job',
+      name: 'Job',
+      rows: 2,
+      panels: [
+        { key: 'viewer-1', id: 'viewer', width: 8, rows: 2 },
+        { key: 'files-1', id: 'files', width: 4, rows: 1 },
+        { key: 'job-2', id: 'job', width: 4, rows: 1 },
+      ],
+    },
+    {
+      id: 'setup',
+      name: 'Setup',
+      rows: 1,
+      panels: [
+        { key: 'probe-1', id: 'probe', width: 6, rows: 1 },
+        { key: 'machining-1', id: 'machining', width: 6, rows: 1 },
+      ],
+    },
+    {
+      id: 'advanced',
+      name: 'Advanced',
+      rows: 1,
+      panels: [
+        { key: 'om-1', id: 'om', width: 7, rows: 1 },
+        { key: 'console-2', id: 'console', width: 5, rows: 1 },
+      ],
+    },
+  ],
+};
 
 /**
- * Bring a stored layout forward when panels change shape.
+ * Bring older stored layouts forward.
  *
- * A saved layout survives updates, so removing a panel would otherwise leave a
- * silent hole where it used to be. The combined Spindle & Job panel became two.
+ * Two shapes have existed: a flat array of pixel-height panels, and the
+ * combined status panel before it split. A stored layout outlives updates, so
+ * neither may be dropped silently — a flat layout becomes a single page with
+ * pixel heights mapped onto row spans.
  */
-function migrate(layout: PanelInstance[]): PanelInstance[] {
-  if (!layout.some((p) => p.id === 'status')) return layout;
-  const out: PanelInstance[] = [];
-  for (const p of layout) {
-    if (p.id === 'status') {
-      out.push({ key: `spindle-${p.key}`, id: 'spindle', width: p.width, height: 480 });
-      out.push({ key: `job-${p.key}`, id: 'job', width: p.width, height: p.height });
-    } else {
-      out.push(p);
+function migrate(stored: unknown): Layout {
+  if (Array.isArray(stored)) {
+    const rows = 2;
+    const panels: PanelInstance[] = [];
+    for (const p of stored as Array<{ key: string; id: string; width: number; height: number }>) {
+      const ids = p.id === 'status' ? ['spindle', 'job'] : [p.id];
+      for (const id of ids) {
+        panels.push({
+          key: `${id}-${panels.length}`,
+          id,
+          width: p.width,
+          rows: Math.max(1, Math.min(rows, Math.round((p.height ?? 360) / 380))),
+        });
+      }
     }
+    return { active: 0, pages: [{ id: 'main', name: 'Main', rows, panels }] };
   }
-  return out;
+
+  const layout = stored as Layout;
+  if (!layout || !Array.isArray(layout.pages) || layout.pages.length === 0) {
+    return structuredClone(DEFAULT_LAYOUT);
+  }
+  return layout;
 }
 
 export class DashboardHost extends PanelElement {
-  private layout: PanelInstance[] = migrate(loadSetting('layout', DEFAULT_LAYOUT));
+  private layout: Layout = migrate(loadSetting<unknown>('layout', null) ?? DEFAULT_LAYOUT);
   private dragKey: string | null = null;
   private pickerOpen = false;
+  private renaming: string | null = null;
 
   override connectedCallback(): void {
     super.connectedCallback();
     this.bind(() => capabilities.get());
+    window.addEventListener('keydown', this.onKeyDown);
+    this.onDispose(() => window.removeEventListener('keydown', this.onKeyDown));
+  }
+
+  /** Number keys switch pages — faster than aiming at a tab at the machine. */
+  private onKeyDown = (e: KeyboardEvent): void => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const target = e.target as HTMLElement | null;
+    if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+    const n = Number(e.key);
+    if (!Number.isInteger(n) || n < 1 || n > this.layout.pages.length) return;
+    this.layout = { ...this.layout, active: n - 1 };
+    this.persist();
+  };
+
+  private get page(): Page {
+    return this.layout.pages[Math.min(this.layout.active, this.layout.pages.length - 1)];
   }
 
   private persist(): void {
@@ -81,46 +169,107 @@ export class DashboardHost extends PanelElement {
     this.requestUpdate();
   }
 
+  private mutatePage(fn: (page: Page) => Page): void {
+    const pages = this.layout.pages.map((p, i) => (i === this.layout.active ? fn(p) : p));
+    this.layout = { ...this.layout, pages };
+    this.persist();
+  }
+
+  // --- Panels ------------------------------------------------------------
+
+  private elements = new Map<string, PanelElement>();
+
+  private elementFor(key: string, tag: string): PanelElement {
+    let el = this.elements.get(key);
+    if (!el) {
+      el = document.createElement(tag) as PanelElement;
+      el.instanceId = key;
+      this.elements.set(key, el);
+    }
+    return el;
+  }
+
   private addPanel(id: string): void {
     const def = panelDefinition(id);
     if (!def) return;
-    this.layout = [
-      ...this.layout,
-      {
-        key: `${id}-${Date.now().toString(36)}`,
-        id,
-        width: def.defaultWidth,
-        height: def.defaultHeight,
-      },
-    ];
+    this.mutatePage((page) => ({
+      ...page,
+      panels: [
+        ...page.panels,
+        { key: `${id}-${Date.now().toString(36)}`, id, width: Math.min(12, def.defaultWidth), rows: 1 },
+      ],
+    }));
     this.pickerOpen = false;
-    this.persist();
+    this.requestUpdate();
   }
 
   private removePanel(key: string): void {
-    this.layout = this.layout.filter((p) => p.key !== key);
     this.elements.delete(key);
-    this.persist();
+    this.mutatePage((page) => ({ ...page, panels: page.panels.filter((p) => p.key !== key) }));
   }
 
   private setWidth(key: string, width: number): void {
-    this.layout = this.layout.map((p) => (p.key === key ? { ...p, width } : p));
+    this.mutatePage((page) => ({
+      ...page,
+      panels: page.panels.map((p) => (p.key === key ? { ...p, width } : p)),
+    }));
+  }
+
+  private setRows(key: string, rows: number): void {
+    this.mutatePage((page) => ({
+      ...page,
+      panels: page.panels.map((p) => (p.key === key ? { ...p, rows } : p)),
+    }));
+  }
+
+  // --- Pages -------------------------------------------------------------
+
+  private addPage(): void {
+    const id = `page-${Date.now().toString(36)}`;
+    this.layout = {
+      pages: [...this.layout.pages, { id, name: `Page ${this.layout.pages.length + 1}`, rows: 2, panels: [] }],
+      active: this.layout.pages.length,
+    };
     this.persist();
   }
 
+  private removePage(index: number): void {
+    if (this.layout.pages.length <= 1) return;
+    const page = this.layout.pages[index];
+    if (page.panels.length && !confirm(`Delete the "${page.name}" page and its ${page.panels.length} panel(s)?`)) return;
+    for (const p of page.panels) this.elements.delete(p.key);
+    const pages = this.layout.pages.filter((_, i) => i !== index);
+    this.layout = { pages, active: Math.max(0, Math.min(this.layout.active, pages.length - 1)) };
+    this.persist();
+  }
+
+  private renamePage(index: number, name: string): void {
+    const pages = this.layout.pages.map((p, i) => (i === index ? { ...p, name: name || p.name } : p));
+    this.layout = { ...this.layout, pages };
+    this.renaming = null;
+    this.persist();
+  }
+
+  private setPageRows(rows: number): void {
+    this.mutatePage((page) => ({
+      ...page,
+      rows,
+      // Nothing may span more rows than the page has.
+      panels: page.panels.map((p) => ({ ...p, rows: Math.min(p.rows, rows) })),
+    }));
+  }
+
   private resetLayout(): void {
-    this.layout = DEFAULT_LAYOUT.map((p) => ({ ...p }));
     this.elements.clear();
+    this.layout = structuredClone(DEFAULT_LAYOUT);
     this.pickerOpen = false;
     this.persist();
   }
 
   // --- Drag to reorder ---------------------------------------------------
-  // Pointer events rather than HTML5 drag-and-drop so it works with touch on a
-  // shop tablet, where dragstart never fires.
 
   private onHeaderPointerDown(e: PointerEvent, key: string): void {
-    if ((e.target as HTMLElement).closest('button')) return;
+    if ((e.target as HTMLElement).closest('button, select')) return;
     this.dragKey = key;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     this.requestUpdate();
@@ -134,14 +283,16 @@ export class DashboardHost extends PanelElement {
     const overKey = over?.dataset.panelKey;
     if (!overKey || overKey === this.dragKey) return;
 
-    const from = this.layout.findIndex((p) => p.key === this.dragKey);
-    const to = this.layout.findIndex((p) => p.key === overKey);
+    const panels = [...this.page.panels];
+    const from = panels.findIndex((p) => p.key === this.dragKey);
+    const to = panels.findIndex((p) => p.key === overKey);
     if (from < 0 || to < 0) return;
-
-    const next = [...this.layout];
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
-    this.layout = next;
+    const [moved] = panels.splice(from, 1);
+    panels.splice(to, 0, moved);
+    this.layout = {
+      ...this.layout,
+      pages: this.layout.pages.map((p, i) => (i === this.layout.active ? { ...p, panels } : p)),
+    };
     this.requestUpdate();
   }
 
@@ -151,96 +302,110 @@ export class DashboardHost extends PanelElement {
     this.persist();
   }
 
-  // --- Resize handle -----------------------------------------------------
-
-  private startResize(e: PointerEvent, key: string): void {
-    e.preventDefault();
-    const panel = this.layout.find((p) => p.key === key);
-    if (!panel) return;
-    const startY = e.clientY;
-    const startHeight = panel.height;
-
-    const move = (ev: PointerEvent) => {
-      const h = Math.max(140, startHeight + (ev.clientY - startY));
-      this.layout = this.layout.map((p) => (p.key === key ? { ...p, height: h } : p));
-      this.requestUpdate();
-    };
-    const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      this.persist();
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-  }
-
   // --- Render ------------------------------------------------------------
 
-  /**
-   * Panel elements are created once per instance and reused. Building them in
-   * render() would hand Lit a fresh node every pass, tearing down and rebuilding
-   * each panel — losing scroll position, console history, viewer camera and any
-   * in-progress edit.
-   */
-  private elements = new Map<string, PanelElement>();
-
-  private elementFor(p: PanelInstance, tag: string): PanelElement {
-    let el = this.elements.get(p.key);
-    if (!el) {
-      el = document.createElement(tag) as PanelElement;
-      el.instanceId = p.key;
-      this.elements.set(p.key, el);
-    }
-    return el;
-  }
-
-  private renderPanel(p: PanelInstance): TemplateResult | typeof nothing {
+  private renderPanel(p: PanelInstance, pageRows: number): TemplateResult | typeof nothing {
     const def = panelDefinition(p.id);
     if (!def) return nothing;
-
-    const el = this.elementFor(p, def.tag);
+    const el = this.elementFor(p.key, def.tag);
 
     return html`
       <section
         class="panel ${this.dragKey === p.key ? 'dragging' : ''}"
         data-panel-key=${p.key}
-        style="grid-column: span ${p.width}; height: ${p.height}px"
+        style="grid-column: span ${p.width}; grid-row: span ${Math.min(p.rows, pageRows)}"
       >
-        <header
-          class="panel-head"
-          @pointerdown=${(e: PointerEvent) => this.onHeaderPointerDown(e, p.key)}
-        >
+        <header class="panel-head" @pointerdown=${(e: PointerEvent) => this.onHeaderPointerDown(e, p.key)}>
           <span class="panel-title">${def.title}</span>
           <span class="panel-tools">
             <select
               class="width-select"
               title="Panel width"
-              .value=${String(p.width)}
-              @change=${(e: Event) =>
-                this.setWidth(p.key, Number((e.target as HTMLSelectElement).value))}
+              @change=${(e: Event) => this.setWidth(p.key, Number((e.target as HTMLSelectElement).value))}
             >
-              ${[3, 4, 5, 6, 8, 9, 12].map(
+              ${[3, 4, 5, 6, 7, 8, 9, 12].map(
                 (w) => html`<option value=${w} ?selected=${w === p.width}>${w}/12</option>`,
               )}
             </select>
-            <button class="icon" title="Remove panel" @click=${() => this.removePanel(p.key)}>
-              ✕
-            </button>
+            ${pageRows > 1
+              ? html`
+                  <select
+                    class="width-select"
+                    title="Panel height in rows"
+                    @change=${(e: Event) => this.setRows(p.key, Number((e.target as HTMLSelectElement).value))}
+                  >
+                    ${Array.from({ length: pageRows }, (_, i) => i + 1).map(
+                      (r) => html`<option value=${r} ?selected=${r === p.rows}>${r}r</option>`,
+                    )}
+                  </select>
+                `
+              : nothing}
+            <button class="icon" title="Remove panel" @click=${() => this.removePanel(p.key)}>✕</button>
           </span>
         </header>
         <div class="panel-body">${el}</div>
-        <div
-          class="resize-handle"
-          title="Drag to resize"
-          @pointerdown=${(e: PointerEvent) => this.startResize(e, p.key)}
-        ></div>
       </section>
+    `;
+  }
+
+  private renderTabs(): TemplateResult {
+    return html`
+      <nav class="pages">
+        ${this.layout.pages.map((page, i) => {
+          const active = i === this.layout.active;
+          if (this.renaming === page.id) {
+            return html`
+              <input
+                class="page-rename"
+                .value=${page.name}
+                autofocus
+                @keydown=${(e: KeyboardEvent) => {
+                  if (e.key === 'Enter') this.renamePage(i, (e.target as HTMLInputElement).value);
+                  if (e.key === 'Escape') ((this.renaming = null), this.requestUpdate());
+                }}
+                @blur=${(e: Event) => this.renamePage(i, (e.target as HTMLInputElement).value)}
+              />
+            `;
+          }
+          return html`
+            <button
+              class="page-tab ${active ? 'active' : ''}"
+              title=${`${page.name} — press ${i + 1}`}
+              @click=${() => {
+                if (active) this.renaming = page.id;
+                else this.layout = { ...this.layout, active: i };
+                this.persist();
+              }}
+            >
+              <span class="page-key">${i + 1}</span>${page.name}
+              ${active && this.layout.pages.length > 1
+                ? html`<span class="page-close" title="Delete page"
+                    @click=${(e: Event) => (e.stopPropagation(), this.removePage(i))}>✕</span>`
+                : nothing}
+            </button>
+          `;
+        })}
+        <button class="page-add" title="Add a page" @click=${() => this.addPage()}>+</button>
+
+        <span class="pages-spacer"></span>
+        <label class="rows-select" title="How many rows this page divides the height into">
+          <select @change=${(e: Event) => this.setPageRows(Number((e.target as HTMLSelectElement).value))}>
+            ${[1, 2, 3].map(
+              (r) => html`<option value=${r} ?selected=${r === this.page.rows}>${r} row${r > 1 ? 's' : ''}</option>`,
+            )}
+          </select>
+        </label>
+        <button class="tiny" title="Add a panel to this page"
+          @click=${() => ((this.pickerOpen = !this.pickerOpen), this.requestUpdate())}>
+          ${this.pickerOpen ? 'Close' : '+ Panel'}
+        </button>
+      </nav>
     `;
   }
 
   private renderPicker(): TemplateResult {
     const caps = capabilities.get();
-    const used = new Set(this.layout.map((p) => p.id));
+    const used = new Set(this.page.panels.map((p) => p.id));
     const available = panelDefinitions().filter((d) => !d.available || d.available(caps));
 
     return html`
@@ -250,17 +415,15 @@ export class DashboardHost extends PanelElement {
             (d) => html`
               <button class="picker-item" @click=${() => this.addPanel(d.id)}>
                 <strong>${d.title}</strong>
-                ${used.has(d.id) ? html`<em>(already shown)</em>` : nothing}
+                ${used.has(d.id) ? html`<em>(already on this page)</em>` : nothing}
                 ${d.description ? html`<small>${d.description}</small>` : nothing}
               </button>
             `,
           )}
         </div>
         <div class="picker-foot">
-          <button class="ghost" @click=${() => this.resetLayout()}>Reset layout</button>
-          <button class="ghost" @click=${() => ((this.pickerOpen = false), this.requestUpdate())}>
-            Close
-          </button>
+          <button class="ghost" @click=${() => this.resetLayout()}>Reset all pages</button>
+          <button class="ghost" @click=${() => ((this.pickerOpen = false), this.requestUpdate())}>Close</button>
         </div>
       </div>
     `;
@@ -268,14 +431,17 @@ export class DashboardHost extends PanelElement {
 
   protected override render(): TemplateResult {
     const caps = capabilities.get();
-    const visible = this.layout.filter((p) => {
+    const page = this.page;
+    const visible = page.panels.filter((p) => {
       const def = panelDefinition(p.id);
       return def && (!def.available || def.available(caps));
     });
 
     return html`
+      ${this.renderTabs()}
       <div
         class="dashboard"
+        style="grid-template-rows: repeat(${page.rows}, minmax(0, 1fr))"
         @pointermove=${(e: PointerEvent) => this.onPointerMove(e)}
         @pointerup=${() => this.onPointerUp()}
         @pointercancel=${() => this.onPointerUp()}
@@ -283,16 +449,14 @@ export class DashboardHost extends PanelElement {
         ${repeat(
           visible,
           (p) => p.key,
-          (p) => this.renderPanel(p),
+          (p) => this.renderPanel(p, page.rows),
         )}
+        ${visible.length === 0
+          ? html`<div class="page-empty">
+              This page is empty — use <strong>+ Panel</strong> to add something.
+            </div>`
+          : nothing}
       </div>
-      <button
-        class="add-panel"
-        title="Add a panel"
-        @click=${() => ((this.pickerOpen = !this.pickerOpen), this.requestUpdate())}
-      >
-        ${this.pickerOpen ? '✕' : '+'}
-      </button>
       ${this.pickerOpen ? this.renderPicker() : nothing}
     `;
   }
