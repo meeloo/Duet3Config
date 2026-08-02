@@ -3,7 +3,8 @@
 
 import './dro.js';
 import './jog.js';
-import './status.js';
+import './spindle.js';
+import './job.js';
 import './console.js';
 import './files.js';
 import './om.js';

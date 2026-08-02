@@ -21,18 +21,41 @@ export interface PanelInstance {
 }
 
 const DEFAULT_LAYOUT: PanelInstance[] = [
-  { key: 'dro-1', id: 'dro', width: 5, height: 320 },
-  // Tall enough for the XY pad, Z column and an aux-axis row without scrolling.
+  { key: 'dro-1', id: 'dro', width: 5, height: 360 },
+  // Tall enough for the XY pad, Z column and an aux-axis column without scrolling.
   { key: 'jog-1', id: 'jog', width: 4, height: 360 },
-  { key: 'status-1', id: 'status', width: 3, height: 320 },
-  { key: 'viewer-1', id: 'viewer', width: 8, height: 460 },
-  { key: 'console-1', id: 'console', width: 4, height: 460 },
+  { key: 'job-1', id: 'job', width: 3, height: 360 },
+  { key: 'viewer-1', id: 'viewer', width: 8, height: 480 },
+  { key: 'spindle-1', id: 'spindle', width: 4, height: 480 },
+  { key: 'console-1', id: 'console', width: 6, height: 420 },
   { key: 'files-1', id: 'files', width: 6, height: 420 },
-  { key: 'om-1', id: 'om', width: 6, height: 420 },
+  { key: 'probe-1', id: 'probe', width: 6, height: 500 },
+  { key: 'machining-1', id: 'machining', width: 6, height: 500 },
+  { key: 'om-1', id: 'om', width: 12, height: 400 },
 ];
 
+/**
+ * Bring a stored layout forward when panels change shape.
+ *
+ * A saved layout survives updates, so removing a panel would otherwise leave a
+ * silent hole where it used to be. The combined Spindle & Job panel became two.
+ */
+function migrate(layout: PanelInstance[]): PanelInstance[] {
+  if (!layout.some((p) => p.id === 'status')) return layout;
+  const out: PanelInstance[] = [];
+  for (const p of layout) {
+    if (p.id === 'status') {
+      out.push({ key: `spindle-${p.key}`, id: 'spindle', width: p.width, height: 480 });
+      out.push({ key: `job-${p.key}`, id: 'job', width: p.width, height: p.height });
+    } else {
+      out.push(p);
+    }
+  }
+  return out;
+}
+
 export class DashboardHost extends PanelElement {
-  private layout: PanelInstance[] = loadSetting('layout', DEFAULT_LAYOUT);
+  private layout: PanelInstance[] = migrate(loadSetting('layout', DEFAULT_LAYOUT));
   private dragKey: string | null = null;
   private pickerOpen = false;
 

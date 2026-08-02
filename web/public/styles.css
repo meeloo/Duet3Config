@@ -479,3 +479,79 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
   grid-template-columns: 1fr; gap: 4px; }
 .probe-setup p { margin: 0 0 8px; }
 .probe-setup code { color: var(--accent); }
+
+/* ---------- Spindle & tools ---------- */
+
+.spindle-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+
+/* The active tool is the highest-consequence fact on the screen. */
+.active-tool {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 14px; margin: 10px 12px 0;
+  border: 2px solid var(--accent); border-radius: 8px;
+  background: var(--tint-accent);
+}
+.active-tool.none { border-color: var(--border-strong); background: transparent; }
+.active-tool-number {
+  font-family: var(--mono); font-size: 34px; font-weight: 700; line-height: 1;
+  color: var(--accent); letter-spacing: -0.02em;
+}
+.active-tool.none .active-tool-number { color: var(--text-faint); }
+.active-tool-detail { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.active-tool-detail strong { font-size: 15px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.active-tool-detail span { font-size: 12px; color: var(--text-dim); }
+.active-tool-detail .unmeasured { color: var(--warn); font-style: normal; }
+
+.spindle-block { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.spindle-readout { display: flex; align-items: baseline; gap: 6px; }
+.spindle-rpm { font-family: var(--mono); font-size: 30px; font-weight: 600;
+  font-variant-numeric: tabular-nums; }
+.spindle-readout.running .spindle-rpm { color: var(--good); }
+.spindle-unit { color: var(--text-dim); font-size: 13px; }
+.spindle-target { color: var(--text-faint); font-size: 13px; margin-left: auto;
+  font-family: var(--mono); }
+.spindle-controls { display: flex; gap: 6px; }
+.spindle-controls select { flex: 1; min-width: 0; font-family: var(--mono); }
+
+.tool-list { flex: 1; overflow: auto; min-height: 0; border-top: 1px solid var(--border); }
+.tool-list-head { display: flex; justify-content: space-between; align-items: baseline;
+  padding: 8px 12px 4px; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--text-dim); font-weight: 600; }
+.tool-list-head em { text-transform: none; letter-spacing: 0;
+  color: var(--text-faint); font-style: normal; font-weight: 400; }
+
+.tool-row { display: flex; align-items: center; gap: 8px; padding: 4px 12px;
+  border-bottom: 1px solid var(--border); }
+.tool-row.active { background: var(--tint-accent); }
+.tool-slot { min-height: 30px; width: 30px; padding: 0; font-family: var(--mono);
+  font-weight: 700; font-size: 13px; }
+.tool-row.active .tool-slot { background: var(--accent); border-color: var(--accent);
+  color: var(--on-accent); }
+.tool-name { flex: 1; min-width: 0; font-size: 13px; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-name em { color: var(--text-faint); font-size: 11px; font-style: normal;
+  margin-left: 8px; }
+.tool-actions { display: flex; gap: 3px; }
+
+.tool-edit { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 4px 12px; padding: 8px 12px 10px; background: var(--bg-raised);
+  border-bottom: 1px solid var(--border); }
+.tool-edit .param.wide { grid-column: 1 / -1; }
+.tool-edit .param-input input[type="text"] { width: 100%; font-family: var(--sans); }
+
+/* ---------- Job ---------- */
+
+.job-panel { display: flex; flex-direction: column; gap: 10px; padding: 12px; height: 100%; }
+.job-head { display: flex; align-items: center; gap: 8px; }
+.job-file { font-family: var(--mono); font-size: 12px; color: var(--text-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+.job-stats > div { display: flex; flex-direction: column; }
+.job-stats > div.wide { grid-column: 1 / -1; }
+.job-stats strong { font-family: var(--mono); font-size: 15px;
+  font-variant-numeric: tabular-nums; }
+.job-stats strong.warn { color: var(--warn); }
+.job-idle { display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; height: 100%; text-align: center; }
+.job-idle p { margin: 0; color: var(--text-dim); font-size: 13px; }
