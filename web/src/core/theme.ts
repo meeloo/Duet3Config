@@ -39,6 +39,8 @@ export interface ViewerPalette {
   /** Cutting moves already executed. */
   done: [number, number, number];
   rapid: [number, number, number];
+  /** Opacity for rapid moves — a light background needs much more than a dark one. */
+  rapidAlpha: number;
   /** Machine work envelope. */
   envelope: [number, number, number];
   /** Bounding box of the loaded toolpath. */
@@ -60,7 +62,8 @@ const LIGHT: ViewerPalette = {
   background: rgb(0xfbfcfd),
   cut: rgb(0x1565c0),
   done: rgb(0x2e7d32),
-  rapid: rgb(0x9aa5b1),
+  rapid: rgb(0x6a7482),
+  rapidAlpha: 0.85,
   envelope: rgb(0x94a1b2),
   bounds: rgb(0xc2cad4),
   grid: rgb(0xdde3ea),
@@ -75,6 +78,7 @@ const DARK: ViewerPalette = {
   cut: rgb(0x8cc7ff),
   done: rgb(0x59d97a),
   rapid: rgb(0x99a0ad),
+  rapidAlpha: 0.45,
   envelope: rgb(0x5c6675),
   bounds: rgb(0x39414d),
   grid: rgb(0x252b34),

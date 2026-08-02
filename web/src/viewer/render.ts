@@ -8,7 +8,7 @@
 // compared against a `progress` uniform, so advancing the cut/uncut boundary as
 // the job runs costs one uniform write per frame rather than a buffer rebuild.
 
-import { lookAt, multiply, perspective, type Mat4 } from './mat4.js';
+import { lookAt, multiply, ortho, perspective, type Mat4 } from './mat4.js';
 import type { ParsedToolpath } from './parse.js';
 import { viewerPalette, type ViewerPalette } from '../core/theme.js';
 
@@ -41,6 +41,7 @@ uniform int uShowRapids;
 uniform vec3 uCutColor;
 uniform vec3 uDoneColor;
 uniform vec3 uRapidColor;
+uniform float uRapidAlpha;
 out vec4 outColor;
 void main() {
   bool rapid = vKind < 0.5;
@@ -49,7 +50,9 @@ void main() {
   float a;
   if (rapid) {
     c = uRapidColor;
-    a = 0.35;
+    // Alpha comes from the palette: a light background needs far more opacity
+    // than a dark one for the same apparent contrast.
+    a = uRapidAlpha;
   } else if (uProgress >= 0.0 && vOffset <= uProgress) {
     c = uDoneColor;
     a = 1.0;
@@ -84,6 +87,30 @@ export interface CameraState {
   target: [number, number, number];
 }
 
+export type Projection = 'perspective' | 'ortho';
+
+export type ViewName = 'home' | 'top' | 'front' | 'back' | 'left' | 'right' | 'iso';
+
+/**
+ * Named camera angles, as (azimuth, elevation) in radians.
+ *
+ * `home` is a shallow look down the long axis from the front — on a bed that is
+ * 2.4x longer than it is wide, a steeper angle wastes most of the viewport on
+ * empty table. Straight-down and dead-on views are nudged a hair off their
+ * exact angle so the floor grid and the envelope walls don't degenerate into a
+ * single line and vanish.
+ */
+export const VIEWS: Record<ViewName, { azimuth: number; elevation: number }> = {
+  home: { azimuth: -Math.PI / 2 - 0.14, elevation: 0.42 },
+  top: { azimuth: -Math.PI / 2, elevation: Math.PI / 2 - 0.001 },
+  front: { azimuth: -Math.PI / 2, elevation: 0.02 },
+  back: { azimuth: Math.PI / 2, elevation: 0.02 },
+  left: { azimuth: Math.PI, elevation: 0.02 },
+  right: { azimuth: 0, elevation: 0.02 },
+  // True isometric: atan(1/sqrt(2)) elevation.
+  iso: { azimuth: -Math.PI / 4, elevation: Math.atan(1 / Math.SQRT2) },
+};
+
 export class ToolpathRenderer {
   private gl: WebGL2RenderingContext;
   private program: WebGLProgram;
@@ -106,18 +133,26 @@ export class ToolpathRenderer {
   private uCutColor: WebGLUniformLocation | null;
   private uDoneColor: WebGLUniformLocation | null;
   private uRapidColor: WebGLUniformLocation | null;
+  private uRapidAlpha: WebGLUniformLocation | null;
   private uOverlayMvp: WebGLUniformLocation | null;
 
   camera: CameraState = {
-    azimuth: -Math.PI / 4,
-    elevation: Math.PI / 5,
+    ...VIEWS.home,
     distance: 400,
     target: [0, 0, 0],
   };
 
+  projection: Projection = 'perspective';
   showRapids = true;
   progress = -1;
   palette: ViewerPalette = viewerPalette();
+
+  /** Point the camera along a named view, keeping the current target and zoom. */
+  setView(name: ViewName): void {
+    const v = VIEWS[name];
+    this.camera.azimuth = v.azimuth;
+    this.camera.elevation = v.elevation;
+  }
 
   constructor(private canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2', {
@@ -137,6 +172,7 @@ export class ToolpathRenderer {
     this.uCutColor = gl.getUniformLocation(this.program, 'uCutColor');
     this.uDoneColor = gl.getUniformLocation(this.program, 'uDoneColor');
     this.uRapidColor = gl.getUniformLocation(this.program, 'uRapidColor');
+    this.uRapidAlpha = gl.getUniformLocation(this.program, 'uRapidAlpha');
     this.uOverlayMvp = gl.getUniformLocation(this.overlayProgram, 'uMvp');
 
     this.overlayVao = gl.createVertexArray()!;
@@ -316,7 +352,18 @@ export class ToolpathRenderer {
       target[2] + distance * Math.sin(elevation),
     ];
     const aspect = this.canvas.width / Math.max(1, this.canvas.height);
-    const proj = perspective(Math.PI / 4, aspect, Math.max(0.1, distance / 100), distance * 10);
+    // Orthographic keeps parallel edges parallel, which is what you want when
+    // reading a toolpath for size; perspective reads better for shape. The
+    // near/far planes are pushed well outside the scene because with no
+    // foreshortening the eye can end up inside the model's bounding box.
+    const proj =
+      this.projection === 'ortho'
+        ? (() => {
+            const h = distance * 0.42;
+            const w = h * aspect;
+            return ortho(-w, w, -h, h, -distance * 10, distance * 10);
+          })()
+        : perspective(Math.PI / 4, aspect, Math.max(0.1, distance / 100), distance * 10);
     const view = lookAt(eye, target, [0, 0, 1]);
     return multiply(proj, view);
   }
@@ -349,6 +396,7 @@ export class ToolpathRenderer {
       gl.uniform3f(this.uCutColor, ...this.palette.cut);
       gl.uniform3f(this.uDoneColor, ...this.palette.done);
       gl.uniform3f(this.uRapidColor, ...this.palette.rapid);
+      gl.uniform1f(this.uRapidAlpha, this.palette.rapidAlpha);
       gl.bindVertexArray(this.vao);
       gl.drawArrays(gl.LINES, 0, this.vertexCount);
     }

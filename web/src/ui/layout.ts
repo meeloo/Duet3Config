@@ -20,18 +20,30 @@ export interface PanelInstance {
   height: number;
 }
 
+/**
+ * Default dashboard.
+ *
+ * Ordered by how often you look at something while actually working:
+ * position and motion first, then the toolpath with the spindle and tool
+ * changer beside it, then files and console, then the operation packs.
+ *
+ * The object-model browser is deliberately absent. It is an advanced
+ * diagnostic — genuinely useful, but not something to spend a sixth of the
+ * screen on before you have needed it once. It is one click away in the panel
+ * picker, and that space goes to the spindle and job instead.
+ */
 const DEFAULT_LAYOUT: PanelInstance[] = [
   { key: 'dro-1', id: 'dro', width: 5, height: 360 },
   // Tall enough for the XY pad, Z column and an aux-axis column without scrolling.
   { key: 'jog-1', id: 'jog', width: 4, height: 360 },
   { key: 'job-1', id: 'job', width: 3, height: 360 },
-  { key: 'viewer-1', id: 'viewer', width: 8, height: 480 },
-  { key: 'spindle-1', id: 'spindle', width: 4, height: 480 },
+  { key: 'viewer-1', id: 'viewer', width: 8, height: 560 },
+  // Full height beside the viewer so all eight ATC slots are visible at once.
+  { key: 'spindle-1', id: 'spindle', width: 4, height: 560 },
   { key: 'console-1', id: 'console', width: 6, height: 420 },
   { key: 'files-1', id: 'files', width: 6, height: 420 },
-  { key: 'probe-1', id: 'probe', width: 6, height: 500 },
-  { key: 'machining-1', id: 'machining', width: 6, height: 500 },
-  { key: 'om-1', id: 'om', width: 12, height: 400 },
+  { key: 'probe-1', id: 'probe', width: 6, height: 520 },
+  { key: 'machining-1', id: 'machining', width: 6, height: 520 },
 ];
 
 /**

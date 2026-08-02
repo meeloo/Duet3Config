@@ -555,3 +555,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .job-idle { display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 8px; height: 100%; text-align: center; }
 .job-idle p { margin: 0; color: var(--text-dim); font-size: 13px; }
+
+/* View preset row under the viewer toolbar. */
+.viewer-views { display: flex; gap: 2px; padding: 4px 8px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--border); }
+.viewer-views .seg { min-height: 26px; padding: 3px 9px; font-size: 11px; }
+.viewer-views .seg.proj { margin-left: auto; min-width: 56px; }

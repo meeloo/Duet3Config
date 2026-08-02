@@ -12,10 +12,10 @@
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { PanelElement, registerPanel } from '../ui/panel.js';
-import { activeDriver, capabilities, connected, machine, run } from '../core/store.js';
+import { activeDriver, capabilities, connected, loadSetting, machine, run, saveSetting } from '../core/store.js';
 import { basename, formatBytes } from '../core/util.js';
 import { parseGcode, type ParsedToolpath } from '../viewer/parse.js';
-import { ToolpathRenderer, type Box } from '../viewer/render.js';
+import { ToolpathRenderer, type Box, type Projection, type ViewName } from '../viewer/render.js';
 import type { FileEntry } from '../machine/types.js';
 import { theme, viewerPalette } from '../core/theme.js';
 import { previewProgram } from '../ui/program.js';
@@ -37,6 +37,7 @@ export class ViewerPanel extends PanelElement {
   private showRapids = true;
   private followJob = true;
   private showEnvelope = true;
+  private projection: Projection = loadSetting<Projection>('viewerProjection', 'perspective');
   /** One-shot: frame the bed once, don't fight the user's camera afterwards. */
   private framedEnvelope = false;
   private files: FileEntry[] = [];
@@ -83,6 +84,7 @@ export class ViewerPanel extends PanelElement {
     try {
       this.renderer = new ToolpathRenderer(canvas);
       this.renderer.palette = viewerPalette(theme.peek());
+      this.renderer.projection = this.projection;
     } catch (err) {
       this.error = (err as Error).message;
       this.requestUpdate();
@@ -168,6 +170,20 @@ export class ViewerPanel extends PanelElement {
       },
       { passive: false },
     );
+  }
+
+  private setView(name: ViewName): void {
+    this.renderer?.setView(name);
+    // Home also re-frames, since it is the "put it back how it was" button.
+    if (name === 'home') this.fit();
+    this.requestUpdate();
+  }
+
+  private toggleProjection(): void {
+    this.projection = this.projection === 'ortho' ? 'perspective' : 'ortho';
+    if (this.renderer) this.renderer.projection = this.projection;
+    saveSetting('viewerProjection', this.projection);
+    this.requestUpdate();
   }
 
   /** Frame the toolpath if one is loaded, otherwise the machine bed. */
@@ -398,8 +414,36 @@ export class ViewerPanel extends PanelElement {
               >`
             : nothing}
           ${this.renderer && (this.path || this.machineEnvelope())
-            ? html`<button class="tiny" @click=${() => this.fit()}>Fit</button>`
+            ? html`<button class="tiny" title="Frame the toolpath, or the bed if none is loaded"
+                @click=${() => this.fit()}>Fit</button>`
             : nothing}
+        </div>
+
+        <div class="viewer-views">
+          ${(
+            [
+              ['home', 'Home', 'Default shallow view down the bed'],
+              ['top', 'Top', 'Look straight down'],
+              ['front', 'Front', 'Look along +Y'],
+              ['back', 'Back', 'Look along −Y'],
+              ['left', 'Left', 'Look along +X'],
+              ['right', 'Right', 'Look along −X'],
+              ['iso', 'Iso', 'True isometric'],
+            ] as Array<[ViewName, string, string]>
+          ).map(
+            ([name, label, title]) => html`
+              <button class="seg" title=${title} @click=${() => this.setView(name)}>${label}</button>
+            `,
+          )}
+          <button
+            class="seg proj"
+            title=${this.projection === 'ortho'
+              ? 'Orthographic — parallel edges stay parallel, true for measuring'
+              : 'Perspective — reads better for shape'}
+            @click=${() => this.toggleProjection()}
+          >
+            ${this.projection === 'ortho' ? 'Ortho' : 'Persp'}
+          </button>
         </div>
 
         ${this.error ? html`<div class="viewer-error">${this.error}</div>` : nothing}
