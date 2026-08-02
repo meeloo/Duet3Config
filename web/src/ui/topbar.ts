@@ -18,6 +18,7 @@ import {
 } from '../core/store.js';
 import { DRIVERS, driverInfo } from '../machine/registry.js';
 import { statusClass, statusLabel } from './widgets.js';
+import { theme, toggleTheme } from '../core/theme.js';
 
 export class TopBar extends PanelElement {
   private password = '';
@@ -32,6 +33,7 @@ export class TopBar extends PanelElement {
       connectionError.get();
       controllerUrl.get();
       driverId.get();
+      theme.get();
     });
   }
 
@@ -110,6 +112,14 @@ export class TopBar extends PanelElement {
               }</span>`
             : nothing}
         </div>
+
+        <button
+          class="icon"
+          title=${theme.get() === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
+          @click=${() => toggleTheme()}
+        >
+          ${theme.get() === 'light' ? '◐' : '◑'}
+        </button>
 
         <button
           class="estop"

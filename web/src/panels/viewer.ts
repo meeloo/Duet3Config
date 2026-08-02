@@ -15,8 +15,9 @@ import { PanelElement, registerPanel } from '../ui/panel.js';
 import { activeDriver, capabilities, connected, machine, run } from '../core/store.js';
 import { basename, formatBytes } from '../core/util.js';
 import { parseGcode, type ParsedToolpath } from '../viewer/parse.js';
-import { ToolpathRenderer } from '../viewer/render.js';
+import { ToolpathRenderer, type Box } from '../viewer/render.js';
 import type { FileEntry } from '../machine/types.js';
+import { theme, viewerPalette } from '../core/theme.js';
 
 const cache = new Map<string, ParsedToolpath>();
 /** Refuse to pull anything past this over the controller's HTTP server. */
@@ -34,6 +35,9 @@ export class ViewerPanel extends PanelElement {
   private error: string | null = null;
   private showRapids = true;
   private followJob = true;
+  private showEnvelope = true;
+  /** One-shot: frame the bed once, don't fight the user's camera afterwards. */
+  private framedEnvelope = false;
   private files: FileEntry[] = [];
   private pickerOpen = false;
 
@@ -43,6 +47,11 @@ export class ViewerPanel extends PanelElement {
       connected.get();
       capabilities.get();
       machine.get();
+    });
+    // Recolour the GL view when the theme changes — it can't read CSS variables.
+    this.bind(() => {
+      const t = theme.get();
+      if (this.renderer) this.renderer.palette = viewerPalette(t);
     });
     this.onDispose(() => this.teardown());
   }
@@ -66,6 +75,7 @@ export class ViewerPanel extends PanelElement {
 
     try {
       this.renderer = new ToolpathRenderer(canvas);
+      this.renderer.palette = viewerPalette(theme.peek());
     } catch (err) {
       this.error = (err as Error).message;
       this.requestUpdate();
@@ -153,9 +163,25 @@ export class ViewerPanel extends PanelElement {
     );
   }
 
+  /** Frame the toolpath if one is loaded, otherwise the machine bed. */
+  private fit(): void {
+    const box = this.path ? { min: this.path.min, max: this.path.max } : this.machineEnvelope();
+    if (box) this.renderer?.frame(box);
+  }
+
   private drawFrame(): void {
     const r = this.renderer;
     if (!r) return;
+
+    // With no file open, frame the bed once the envelope becomes known so the
+    // panel shows the machine rather than an empty void.
+    if (!this.path && !this.framedEnvelope) {
+      const env = this.machineEnvelope();
+      if (env) {
+        r.frame(env);
+        this.framedEnvelope = true;
+      }
+    }
 
     const state = machine.peek();
     r.showRapids = this.showRapids;
@@ -180,8 +206,39 @@ export class ViewerPanel extends PanelElement {
     r.setOverlay(
       cutter,
       this.path ? { min: this.path.min, max: this.path.max } : null,
+      this.showEnvelope ? this.machineEnvelope() : null,
     );
     r.render();
+  }
+
+  /**
+   * The machine's travel limits, expressed in WORK coordinates.
+   *
+   * The controller reports axis min/max in machine coordinates, but the
+   * toolpath — and everything else drawn here — is in work coordinates. The
+   * offset between them is whatever the active WCS is set to, which we can read
+   * straight off the axis rather than digging through workplaceOffsets:
+   * offset = machinePosition - userPosition.
+   */
+  private machineEnvelope(): Box | null {
+    const axes = machine.peek().axes;
+    const get = (letter: string) => axes.find((a) => a.letter === letter);
+    const x = get('X');
+    const y = get('Y');
+    const z = get('Z');
+    if (!x || !y || !z) return null;
+
+    const toWork = (a: NonNullable<ReturnType<typeof get>>, v: number) =>
+      v - (a.machine - a.work);
+
+    // A machine that has never been homed still reports its configured limits,
+    // so this is useful before homing too.
+    if (x.max === x.min || y.max === y.min) return null;
+
+    return {
+      min: [toWork(x, x.min), toWork(y, y.min), toWork(z, z.min)],
+      max: [toWork(x, x.max), toWork(y, y.max), toWork(z, z.max)],
+    };
   }
 
   // --- Loading -----------------------------------------------------------
@@ -284,6 +341,16 @@ export class ViewerPanel extends PanelElement {
             />
             Rapids
           </label>
+          <label class="check">
+            <input
+              type="checkbox"
+              .checked=${this.showEnvelope}
+              @change=${(e: Event) => {
+                this.showEnvelope = (e.target as HTMLInputElement).checked;
+              }}
+            />
+            Envelope
+          </label>
           ${caps.jobFilePosition
             ? html`
                 <label class="check">
@@ -306,8 +373,8 @@ export class ViewerPanel extends PanelElement {
                 >${(this.path.positions.length / 6).toLocaleString()} segs</span
               >`
             : nothing}
-          ${this.renderer && this.path
-            ? html`<button class="tiny" @click=${() => this.renderer!.frame(this.path!)}>Fit</button>`
+          ${this.renderer && (this.path || this.machineEnvelope())
+            ? html`<button class="tiny" @click=${() => this.fit()}>Fit</button>`
             : nothing}
         </div>
 

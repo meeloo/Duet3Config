@@ -6,6 +6,10 @@ import './ui/messagebox.js';
 import './ui/layout.js';
 
 import { actions, connect, controllerUrl, driverId, loadSetting, machine } from './core/store.js';
+import { initTheme } from './core/theme.js';
+
+// Before first paint, so there is no flash of the wrong theme.
+initTheme();
 
 const root = document.getElementById('app');
 if (!root) throw new Error('#app not found');

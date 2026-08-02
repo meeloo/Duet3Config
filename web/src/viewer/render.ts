@@ -10,6 +10,13 @@
 
 import { lookAt, multiply, perspective, type Mat4 } from './mat4.js';
 import type { ParsedToolpath } from './parse.js';
+import { viewerPalette, type ViewerPalette } from '../core/theme.js';
+
+/** An axis-aligned box in work coordinates. */
+export interface Box {
+  min: [number, number, number];
+  max: [number, number, number];
+}
 
 const VERT = `#version 300 es
 precision highp float;
@@ -110,6 +117,7 @@ export class ToolpathRenderer {
 
   showRapids = true;
   progress = -1;
+  palette: ViewerPalette = viewerPalette();
 
   constructor(private canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2', {
@@ -189,15 +197,15 @@ export class ToolpathRenderer {
     this.frame(path);
   }
 
-  /** Point the camera at the whole toolpath. */
-  frame(path: ParsedToolpath): void {
-    const cx = (path.min[0] + path.max[0]) / 2;
-    const cy = (path.min[1] + path.max[1]) / 2;
-    const cz = (path.min[2] + path.max[2]) / 2;
+  /** Point the camera at a box — a toolpath's bounds or the machine envelope. */
+  frame(box: Box): void {
+    const cx = (box.min[0] + box.max[0]) / 2;
+    const cy = (box.min[1] + box.max[1]) / 2;
+    const cz = (box.min[2] + box.max[2]) / 2;
     const span = Math.max(
-      path.max[0] - path.min[0],
-      path.max[1] - path.min[1],
-      path.max[2] - path.min[2],
+      box.max[0] - box.min[0],
+      box.max[1] - box.min[1],
+      box.max[2] - box.min[2],
       10,
     );
     this.camera.target = [cx, cy, cz];
@@ -205,16 +213,22 @@ export class ToolpathRenderer {
   }
 
   /**
-   * Overlay geometry: origin axes, the machine's work envelope, and a crosshair
-   * at the current cutter position. Rebuilt per frame — it is a handful of
-   * vertices, so there is nothing to gain from caching it.
+   * Overlay geometry: work origin, the machine's travel envelope with a floor
+   * grid, the loaded toolpath's bounding box, and a crosshair at the cutter.
+   * Rebuilt per frame — it is a few hundred vertices, so caching buys nothing.
+   *
+   * Everything here is in WORK coordinates. The envelope arrives already
+   * converted by the caller, because the axis limits the controller reports are
+   * in machine coordinates and the toolpath is not.
    */
   setOverlay(
     cutter: [number, number, number] | null,
-    bounds: { min: [number, number, number]; max: [number, number, number] } | null,
+    bounds: Box | null,
+    envelope: Box | null = null,
   ): void {
     const pos: number[] = [];
     const col: number[] = [];
+    const p = this.palette;
 
     const seg = (
       a: [number, number, number],
@@ -225,19 +239,9 @@ export class ToolpathRenderer {
       col.push(...c, ...c);
     };
 
-    // Work origin marker.
-    const axisLen = bounds
-      ? Math.max(bounds.max[0] - bounds.min[0], bounds.max[1] - bounds.min[1], 20) * 0.08
-      : 20;
-    seg([0, 0, 0], [axisLen, 0, 0], [0.85, 0.25, 0.25]);
-    seg([0, 0, 0], [0, axisLen, 0], [0.35, 0.75, 0.35]);
-    seg([0, 0, 0], [0, 0, axisLen], [0.35, 0.55, 0.9]);
-
-    if (bounds) {
-      const [x0, y0, z0] = bounds.min;
-      const [x1, y1, z1] = bounds.max;
-      const c: [number, number, number] = [0.3, 0.3, 0.36];
-      // Bottom rectangle, top rectangle, verticals.
+    const wire = (box: Box, c: [number, number, number]) => {
+      const [x0, y0, z0] = box.min;
+      const [x1, y1, z1] = box.max;
       const corners: Array<[number, number]> = [
         [x0, y0],
         [x1, y0],
@@ -251,15 +255,47 @@ export class ToolpathRenderer {
         seg([ax, ay, z1], [bx, by, z1], c);
         seg([ax, ay, z0], [ax, ay, z1], c);
       }
+    };
+
+    // Scale the origin marker to whatever is on screen.
+    const ref = envelope ?? bounds;
+    const axisLen = ref
+      ? Math.max(ref.max[0] - ref.min[0], ref.max[1] - ref.min[1], 20) * 0.05
+      : 20;
+
+    if (envelope) {
+      // Floor grid at the envelope's bottom, at a round spacing that keeps the
+      // line count sane on a 1500mm bed.
+      const w = envelope.max[0] - envelope.min[0];
+      const h = envelope.max[1] - envelope.min[1];
+      const step = gridStep(Math.max(w, h));
+      const z = envelope.min[2];
+
+      const startX = Math.ceil(envelope.min[0] / step) * step;
+      for (let x = startX; x <= envelope.max[0]; x += step) {
+        seg([x, envelope.min[1], z], [x, envelope.max[1], z], p.grid);
+      }
+      const startY = Math.ceil(envelope.min[1] / step) * step;
+      for (let y = startY; y <= envelope.max[1]; y += step) {
+        seg([envelope.min[0], y, z], [envelope.max[0], y, z], p.grid);
+      }
+
+      wire(envelope, p.envelope);
     }
+
+    if (bounds) wire(bounds, p.bounds);
+
+    // Work origin last so it draws over the grid.
+    seg([0, 0, 0], [axisLen, 0, 0], p.axisX);
+    seg([0, 0, 0], [0, axisLen, 0], p.axisY);
+    seg([0, 0, 0], [0, 0, axisLen], p.axisZ);
 
     if (cutter) {
       const [x, y, z] = cutter;
       const s = axisLen * 0.6;
-      const c: [number, number, number] = [1.0, 0.75, 0.15];
-      seg([x - s, y, z], [x + s, y, z], c);
-      seg([x, y - s, z], [x, y + s, z], c);
-      seg([x, y, z], [x, y, z + s * 2], c);
+      seg([x - s, y, z], [x + s, y, z], p.cutter);
+      seg([x, y - s, z], [x, y + s, z], p.cutter);
+      seg([x, y, z], [x, y, z + s * 2], p.cutter);
     }
 
     const gl = this.gl;
@@ -299,7 +335,8 @@ export class ToolpathRenderer {
     const gl = this.gl;
     this.resize();
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-    gl.clearColor(0.07, 0.08, 0.10, 1);
+    const bg = this.palette.background;
+    gl.clearColor(bg[0], bg[1], bg[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     const mvp = this.mvp();
@@ -309,9 +346,9 @@ export class ToolpathRenderer {
       gl.uniformMatrix4fv(this.uMvp, false, mvp);
       gl.uniform1f(this.uProgress, this.progress);
       gl.uniform1i(this.uShowRapids, this.showRapids ? 1 : 0);
-      gl.uniform3f(this.uCutColor, 0.55, 0.78, 1.0);
-      gl.uniform3f(this.uDoneColor, 0.35, 0.85, 0.45);
-      gl.uniform3f(this.uRapidColor, 0.6, 0.6, 0.7);
+      gl.uniform3f(this.uCutColor, ...this.palette.cut);
+      gl.uniform3f(this.uDoneColor, ...this.palette.done);
+      gl.uniform3f(this.uRapidColor, ...this.palette.rapid);
       gl.bindVertexArray(this.vao);
       gl.drawArrays(gl.LINES, 0, this.vertexCount);
     }
@@ -344,6 +381,13 @@ export class ToolpathRenderer {
       gl.deleteProgram(this.overlayProgram);
     }
   }
+}
+
+/** Round grid spacing giving roughly 10-30 lines across the larger dimension. */
+function gridStep(span: number): number {
+  const candidates = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500];
+  for (const c of candidates) if (span / c <= 30) return c;
+  return 1000;
 }
 
 function link(gl: WebGL2RenderingContext, vertSrc: string, fragSrc: string): WebGLProgram {
