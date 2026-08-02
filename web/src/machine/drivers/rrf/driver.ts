@@ -242,7 +242,16 @@ export class RrfDriver implements MachineDriver {
 
   private rebuildState(): void {
     const m = this.model;
-    const omAxes = m.move?.axes ?? [];
+
+    // RRF's object-model arrays are indexed by *number*, not packed, so any
+    // slot the machine doesn't define comes back as null. This config declares
+    // M563 P1..P9 with no P0, so `tools[0]` is null — and reading `.number` off
+    // it is what "null is not an object" was. Never touch fields on a member of
+    // one of these arrays without dropping the holes first.
+    const omAxes = (m.move?.axes ?? []).filter(Boolean);
+    const omTools = (m.tools ?? []).filter(Boolean);
+    const omSpindles = (m.spindles ?? []).filter(Boolean);
+    const board = (m.boards ?? []).filter(Boolean)[0] ?? null;
 
     const axes: Axis[] = omAxes.map((a) => ({
       letter: a.letter,
@@ -255,16 +264,15 @@ export class RrfDriver implements MachineDriver {
       workOffsets: a.workplaceOffsets ?? [],
     }));
 
-    const spindleOm = (m.spindles ?? []).find((s) => s && s.max > 0) ?? m.spindles?.[0] ?? null;
+    const spindleOm = omSpindles.find((s) => s.max > 0) ?? omSpindles[0] ?? null;
     const job = m.job;
     const fileSize = job?.file?.size ?? null;
     const filePosition = job?.filePosition ?? null;
 
     const currentToolNumber = m.state?.currentTool ?? -1;
-    const toolOm = (m.tools ?? []).find((t) => t.number === currentToolNumber) ?? null;
+    const toolOm = omTools.find((t) => t.number === currentToolNumber) ?? null;
 
     const box = m.state?.messageBox;
-    const board = m.boards?.[0];
 
     this.state = {
       status: mapStatus(m.state?.status),

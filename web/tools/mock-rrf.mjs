@@ -68,13 +68,19 @@ const globals = {
   dustShoeEngagedU: 30,
 };
 
-const tools = Array.from({ length: 9 }, (_, i) => ({
-  number: i + 1,
-  name: i === 8 ? 'Manual Tool 9' : `Spindle tool ${i + 1}`,
-  offsets: [0, 0, -12.5 - i * 0.7, 0],
-  spindle: 0,
-  state: i + 1 === state.currentTool ? 'active' : 'off',
-}));
+// Indexed by tool NUMBER, not packed — exactly like the firmware. This config
+// declares M563 P1..P9 with no P0, so slot 0 is a genuine null. A mock that
+// returns a packed array hides every "read a field off a hole" bug.
+const tools = [
+  null,
+  ...Array.from({ length: 9 }, (_, i) => ({
+    number: i + 1,
+    name: i === 8 ? 'Manual Tool 9' : `Spindle tool ${i + 1}`,
+    offsets: [0, 0, -12.5 - i * 0.7, 0],
+    spindle: 0,
+    state: i + 1 === state.currentTool ? 'active' : 'off',
+  })),
+];
 
 // Sizes are patched from FILE_CONTENT below so job progress is consistent with
 // what the viewer actually parses.

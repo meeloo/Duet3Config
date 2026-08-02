@@ -202,11 +202,15 @@ export function mapPromptMode(mode: number): import('../../types.js').MachinePro
   }
 }
 
-/** RRF axisControls is a bitmap over the machine's axis list. */
+/**
+ * RRF axisControls is a bitmap over the machine's axis list.
+ * Tolerates holes — object-model arrays are indexed by number, not packed.
+ */
 export function expandAxisControls(bitmap: number, axes: OmAxis[]): string[] {
   const out: string[] = [];
   for (let i = 0; i < axes.length; i++) {
-    if (bitmap & (1 << i)) out.push(axes[i].letter);
+    const letter = axes[i]?.letter;
+    if (letter && bitmap & (1 << i)) out.push(letter);
   }
   return out;
 }
