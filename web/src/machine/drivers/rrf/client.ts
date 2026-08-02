@@ -204,9 +204,12 @@ export class RrfClient {
    * yields a full subtree, which we only issue when its sequence number moves.
    */
   async model<T = unknown>(key = '', flags = 'd99fn'): Promise<T> {
+    // Omit `key` entirely when empty rather than sending `key=`. tools/grr.py
+    // talks to this same machine with `rr_model?flags=d99fn` and no key at all,
+    // so match the form that is known-good on real hardware.
     const res = await this.json<{ key: string; flags: string; result: T; err?: number }>(
       'rr_model',
-      { key, flags },
+      { key: key || undefined, flags },
     );
     if (res.err) throw new RrfError(`rr_model(${key}) failed (err ${res.err})`, res.err);
     return res.result;
