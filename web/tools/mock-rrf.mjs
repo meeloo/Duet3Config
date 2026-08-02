@@ -236,10 +236,16 @@ const MIME = {
   '.map': 'application/json',
 };
 
+// Deliberately as limited as the real firmware.
+//
+// `M586 C"*"` makes RRF send Access-Control-Allow-Origin and nothing else — it
+// does NOT answer a CORS preflight with Access-Control-Allow-Headers. An
+// obliging mock that sends the full permissive set hides an entire class of bug:
+// any request with a custom header or non-simple Content-Type works against the
+// mock and dies against the machine. So we mirror the firmware's actual
+// behaviour, and preflights fail here exactly as they do on the Duet.
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'X-Session-Key, Content-Type');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
 }
 
 function sendJson(res, obj) {
@@ -252,9 +258,10 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const path = url.pathname;
 
+  // RRF has no OPTIONS handler, so a preflighted request gets nothing usable and
+  // the browser reports an opaque network failure. Reproduce that here.
   if (req.method === 'OPTIONS') {
-    cors(res);
-    res.writeHead(204);
+    res.writeHead(405);
     return res.end();
   }
 

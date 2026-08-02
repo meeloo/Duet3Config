@@ -41,19 +41,38 @@ export class RrfClient {
   private sessionKey: number | null = null;
   /** Set once we know the firmware ignores/rejects sessionKey (pre-3.5-b4). */
   private useSessionKey = true;
+  /**
+   * True when the page is served from the controller itself, so no CORS applies.
+   *
+   * This matters more than it looks. `M586 C"*"` makes RRF send
+   * Access-Control-Allow-Origin, but it does NOT answer a CORS *preflight* with
+   * Access-Control-Allow-Headers. So cross-origin, any request carrying a custom
+   * header (X-Session-Key) or a non-simple Content-Type is preflighted and fails
+   * at the network layer — while rr_connect, which carries neither, succeeds.
+   * That asymmetry is exactly what "connected… then rr_model: Load failed" is.
+   *
+   * Cross-origin we therefore stay inside the CORS-simple envelope: no custom
+   * headers, no exotic content types. The cost is falling back to RRF's implicit
+   * per-IP session, which is how every client worked before 3.5-b4.
+   */
+  private readonly sameOrigin: boolean;
 
   constructor(url: string) {
     this.base = normaliseBase(url);
+    this.sameOrigin = isSameOrigin(this.base);
   }
 
   get baseUrl(): string {
     return this.base;
   }
 
+  /** True when served from the controller and a session key is in play. */
+  private get canUseSessionHeader(): boolean {
+    return this.sameOrigin && this.useSessionKey && this.sessionKey != null;
+  }
+
   private headers(): HeadersInit {
-    return this.sessionKey != null && this.useSessionKey
-      ? { 'X-Session-Key': String(this.sessionKey) }
-      : {};
+    return this.canUseSessionHeader ? { 'X-Session-Key': String(this.sessionKey) } : {};
   }
 
   private url(endpoint: string, params: Record<string, string | number | undefined> = {}): string {
@@ -79,12 +98,29 @@ export class RrfClient {
         credentials: 'omit',
       });
     } catch (e) {
-      throw new RrfError(`network error calling ${endpoint}: ${(e as Error).message}`);
+      // A cross-origin fetch that trips CORS surfaces as an opaque network
+      // failure ("Load failed" in Safari, "Failed to fetch" in Chrome) with no
+      // detail, so say what it almost certainly is rather than echoing that.
+      const detail = (e as Error).message;
+      throw new RrfError(
+        this.sameOrigin
+          ? `network error calling ${endpoint}: ${detail} — is the controller reachable?`
+          : `network error calling ${endpoint}: ${detail} — cross-origin request blocked. ` +
+            `Check M586 C"*" is set in config-network.g, and that the controller is reachable over plain http.`,
+      );
     }
 
     // RRF answers 401 when the session has expired or was evicted.
     if (res.status === 401 || res.status === 403) {
       throw new SessionLostError(`session rejected by controller (${res.status})`, undefined, res.status);
+    }
+    if (res.status === 404 && endpoint === 'rr_connect') {
+      throw new RrfError(
+        `rr_connect returned HTTP 404 — ${this.base} does not look like a RepRapFirmware ` +
+          `controller. Enter the controller's address in the top bar.`,
+        undefined,
+        404,
+      );
     }
     if (!res.ok) {
       throw new RrfError(`${endpoint} returned HTTP ${res.status}`, undefined, res.status);
@@ -121,7 +157,10 @@ export class RrfClient {
     }>('rr_connect', {
       password: password || 'reprap',
       time: rrfTimestamp(),
-      sessionKey: 'yes',
+      // Only ask for a session key when we can actually send it back. Requesting
+      // one cross-origin would allocate a session slot on the board that we then
+      // could never authenticate against, since the header would be preflighted.
+      sessionKey: this.sameOrigin ? 'yes' : undefined,
     });
 
     if (res.err === 1) throw new RrfError('incorrect password', 1);
@@ -237,8 +276,12 @@ export class RrfClient {
       { name: path, time: rrfTimestamp(), crc32: crc32Hex(data) },
       {
         method: 'POST',
+        // A Blob with no type makes fetch omit Content-Type entirely, keeping the
+        // request CORS-simple. Setting application/octet-stream would preflight
+        // it and fail cross-origin exactly like the X-Session-Key header does.
+        // RRF doesn't inspect the content type on rr_upload — tools/grr.py sends
+        // application/json and the firmware is perfectly happy.
         body: new Blob([data as unknown as BlobPart]),
-        headers: { 'Content-Type': 'application/octet-stream' },
       },
     );
     const body = (await res.json()) as { err: number };
@@ -278,4 +321,14 @@ function normaliseBase(url: string): string {
   let u = url.trim();
   if (!/^https?:\/\//i.test(u)) u = `http://${u}`;
   return u.replace(/\/+$/, '');
+}
+
+/** Served from the controller itself? Then CORS doesn't apply at all. */
+function isSameOrigin(base: string): boolean {
+  if (typeof location === 'undefined') return true; // non-browser (tests)
+  try {
+    return new URL(base).origin === location.origin;
+  } catch {
+    return false;
+  }
 }
