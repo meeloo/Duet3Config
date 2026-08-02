@@ -92,6 +92,71 @@ export function field(label: string, control: TemplateResult): TemplateResult {
   return html`<label class="field"><span>${label}</span>${control}</label>`;
 }
 
+/** Numeric parameter input. `onChange` fires on change, not on every keystroke. */
+export function numberField(
+  label: string,
+  value: number,
+  onChange: (v: number) => void,
+  opts: { step?: number; min?: number; max?: number; suffix?: string; title?: string } = {},
+): TemplateResult {
+  return html`
+    <label class="param" title=${opts.title ?? ''}>
+      <span class="param-label">${label}</span>
+      <span class="param-input">
+        <input
+          type="number"
+          .value=${String(value)}
+          step=${opts.step ?? 'any'}
+          min=${opts.min ?? ''}
+          max=${opts.max ?? ''}
+          @change=${(e: Event) => {
+            const v = Number((e.target as HTMLInputElement).value);
+            if (isFinite(v)) onChange(v);
+          }}
+        />
+        ${opts.suffix ? html`<em>${opts.suffix}</em>` : nothing}
+      </span>
+    </label>
+  `;
+}
+
+export function selectField<T extends string>(
+  label: string,
+  value: T,
+  options: Array<{ value: T; label: string }>,
+  onChange: (v: T) => void,
+): TemplateResult {
+  return html`
+    <label class="param">
+      <span class="param-label">${label}</span>
+      <span class="param-input">
+        <select @change=${(e: Event) => onChange((e.target as HTMLSelectElement).value as T)}>
+          ${options.map(
+            (o) => html`<option value=${o.value} ?selected=${o.value === value}>${o.label}</option>`,
+          )}
+        </select>
+      </span>
+    </label>
+  `;
+}
+
+export function checkField(
+  label: string,
+  value: boolean,
+  onChange: (v: boolean) => void,
+): TemplateResult {
+  return html`
+    <label class="param check-param">
+      <input
+        type="checkbox"
+        .checked=${value}
+        @change=${(e: Event) => onChange((e.target as HTMLInputElement).checked)}
+      />
+      <span>${label}</span>
+    </label>
+  `;
+}
+
 export function warnIf(condition: boolean, message: string): TemplateResult | typeof nothing {
   return condition ? html`<div class="warn-banner">${message}</div>` : nothing;
 }

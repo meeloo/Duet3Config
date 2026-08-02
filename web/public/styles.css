@@ -444,3 +444,38 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 
 .warn-banner { padding: 6px 10px; background: var(--tint-warn);
   color: var(--warn); font-size: 12px; border-radius: var(--radius); }
+
+/* ---------- Operation packs (probing, machining) ---------- */
+
+.pack { display: flex; flex-direction: column; height: 100%; }
+.pack-bar { display: flex; gap: 8px; align-items: center; padding: 6px 8px;
+  border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.pack-tabs { display: flex; gap: 2px; flex-wrap: wrap; flex: 1; }
+.pack-blurb { padding: 8px 12px 0; color: var(--text-dim); font-size: 12px; }
+.pack-note { padding: 6px 12px; color: var(--text-faint); font-size: 12px; }
+.pack-note code { color: var(--accent); }
+.pack-actions { display: flex; gap: 8px; padding: 10px 12px; margin-top: auto;
+  border-top: 1px solid var(--border); }
+
+.param-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 6px 12px; padding: 10px 12px; overflow: auto;
+}
+.param { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.param-label { color: var(--text-dim); font-size: 12px; white-space: nowrap; }
+.param-input { display: flex; align-items: center; gap: 4px; }
+.param-input input, .param-input select { min-height: 30px; padding: 4px 8px; width: 110px;
+  font-family: var(--mono); font-size: 12px; }
+.param-input select { width: auto; max-width: 190px; font-family: var(--sans); }
+.param-input em { color: var(--text-faint); font-size: 11px; font-style: normal; width: 42px; }
+.param.check-param { justify-content: flex-start; gap: 6px; grid-column: 1 / -1; }
+.param.check-param input { min-height: 0; width: 15px; height: 15px; }
+.param.check-param span { font-size: 12px; color: var(--text-dim); }
+.param-note { grid-column: 1 / -1; color: var(--text-faint); font-size: 11px;
+  padding: 0 0 6px; line-height: 1.5; }
+.param-note code { color: var(--accent); }
+
+.probe-setup { padding: 10px 12px; overflow: auto; display: grid;
+  grid-template-columns: 1fr; gap: 4px; }
+.probe-setup p { margin: 0 0 8px; }
+.probe-setup code { color: var(--accent); }

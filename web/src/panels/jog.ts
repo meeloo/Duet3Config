@@ -56,6 +56,24 @@ export class JogPanel extends PanelElement {
     this.repeatInterval = null;
   }
 
+  /** A vertical up / home / down column for one axis (Z and any aux axis). */
+  private verticalAxis(letter: string): TemplateResult {
+    return html`
+      <div class="jog-z">
+        ${this.jogButton(letter, 1, `${letter}↑`)}
+        <button
+          class="jog-btn home"
+          title="Home ${letter}"
+          ?disabled=${!this.canMove}
+          @click=${() => void actions.home([letter])}
+        >
+          ⌂
+        </button>
+        ${this.jogButton(letter, -1, `${letter}↓`)}
+      </div>
+    `;
+  }
+
   private jogButton(axis: string, sign: number, label: string, cls = ''): TemplateResult {
     return html`
       <button
@@ -121,46 +139,12 @@ export class JogPanel extends PanelElement {
               `
             : nothing}
 
-          ${letters.has('Z')
-            ? html`
-                <div class="jog-z">
-                  ${this.jogButton('Z', 1, 'Z↑')}
-                  <button
-                    class="jog-btn home"
-                    title="Home Z"
-                    ?disabled=${!this.canMove}
-                    @click=${() => void actions.home(['Z'])}
-                  >
-                    ⌂
-                  </button>
-                  ${this.jogButton('Z', -1, 'Z↓')}
-                </div>
-              `
-            : nothing}
+          ${letters.has('Z') ? this.verticalAxis('Z') : nothing}
+          <!-- Aux axes get the same vertical column as Z, beside it. On this
+               machine U raises and lowers the dust shoe, so an up/down pair
+               reads correctly where a −/+ row did not. -->
+          ${auxAxes.map((a) => this.verticalAxis(a.letter))}
         </div>
-
-        ${auxAxes.length
-          ? html`
-              <div class="jog-aux">
-                ${auxAxes.map(
-                  (a) => html`
-                    <div class="jog-aux-row">
-                      <span class="axis-letter">${a.letter}</span>
-                      ${this.jogButton(a.letter, -1, '−')}
-                      ${this.jogButton(a.letter, 1, '+')}
-                      <button
-                        class="tiny"
-                        ?disabled=${!this.canMove}
-                        @click=${() => void actions.home([a.letter])}
-                      >
-                        ⌂
-                      </button>
-                    </div>
-                  `,
-                )}
-              </div>
-            `
-          : nothing}
 
         ${!this.canMove && connected.get()
           ? html`<div class="jog-blocked">Machine busy — jogging disabled</div>`

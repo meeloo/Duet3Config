@@ -18,6 +18,7 @@ import { parseGcode, type ParsedToolpath } from '../viewer/parse.js';
 import { ToolpathRenderer, type Box } from '../viewer/render.js';
 import type { FileEntry } from '../machine/types.js';
 import { theme, viewerPalette } from '../core/theme.js';
+import { previewProgram } from '../ui/program.js';
 
 const cache = new Map<string, ParsedToolpath>();
 /** Refuse to pull anything past this over the controller's HTTP server. */
@@ -52,6 +53,12 @@ export class ViewerPanel extends PanelElement {
     this.bind(() => {
       const t = theme.get();
       if (this.renderer) this.renderer.palette = viewerPalette(t);
+    });
+    // The probing and machining packs push generated programs here to be looked
+    // at before they are written to the controller.
+    this.bind(() => {
+      const p = previewProgram.get();
+      if (p) this.showGenerated(p.name, p.gcode);
     });
     this.onDispose(() => this.teardown());
   }
@@ -290,6 +297,23 @@ export class ViewerPanel extends PanelElement {
       this.error = `parse failed: ${(err as Error).message}`;
     } finally {
       this.loading = false;
+      this.requestUpdate();
+    }
+  }
+
+  /** Render a program that exists only in the browser, before it is uploaded. */
+  private showGenerated(name: string, gcode: string): void {
+    try {
+      const parsed = parseGcode(gcode);
+      this.error = parsed.positions.length ? null : 'Generated program contains no motion';
+      // Deliberately not cached by path — a generated program changes every time
+      // a parameter moves, and it has no file on the controller yet.
+      this.path = parsed;
+      this.loadedFrom = `(generated) ${name}`;
+      this.renderer?.setToolpath(parsed);
+      this.requestUpdate();
+    } catch (err) {
+      this.error = `preview failed: ${(err as Error).message}`;
       this.requestUpdate();
     }
   }
