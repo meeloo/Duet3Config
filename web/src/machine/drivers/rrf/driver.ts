@@ -90,13 +90,43 @@ export class RrfDriver implements MachineDriver {
     const info = await this.client.connect(config.password ?? '');
     this.log('info', `connected to ${info.boardType}${info.sessionKey != null ? '' : ' (legacy session)'}`);
 
-    // Seed with a full verbose model so axis limits, tool names and board
-    // identity are present before the first live patch lands.
-    this.model = (await this.client.model('', 'd99vn')) as ObjectModel;
-    this.seqs = { ...(this.model.seqs ?? {}) };
+    await this.seedModel();
     this.rebuildState();
 
     this.schedule(0);
+  }
+
+  /**
+   * Seed the cached model, one top-level key at a time.
+   *
+   * Emphatically NOT `rr_model?flags=d99vn` with an empty key. That asks the
+   * board to serialise its entire object model, verbose, nulls included, to
+   * unlimited depth — by far the largest response it can be made to produce, and
+   * on a machine with nine tools and four axes it is big enough that the board
+   * can fail to deliver it at all. (The firmware gained an `p` flag specifically
+   * to shorten responses, which is the same problem viewed from the other end.)
+   *
+   * Fetching per key is also what the documented seqs-driven pattern expects,
+   * and it degrades gracefully: one key the firmware chokes on costs us that
+   * subtree, not the whole connection.
+   */
+  private async seedModel(): Promise<void> {
+    const client = this.requireClient();
+    this.model = {};
+
+    const seqs = (await client.model('seqs', 'd99vn')) as OmSeqs;
+    this.seqs = { ...(seqs ?? {}) };
+
+    for (const key of TRACKED_KEYS) {
+      try {
+        const subtree = await client.model(key, 'd99vn');
+        this.model = mergeInto(this.model, { [key]: subtree });
+      } catch (err) {
+        // A missing or oversized key must not abort the connection.
+        this.log('warning', `could not read ${key}: ${(err as Error).message}`);
+      }
+    }
+    this.model = mergeInto(this.model, { seqs: this.seqs });
   }
 
   async disconnect(): Promise<void> {
@@ -186,8 +216,7 @@ export class RrfDriver implements MachineDriver {
       try {
         if (this.client && this.config) {
           await this.client.connect(this.config.password ?? '');
-          this.model = (await this.client.model('', 'd99vn')) as ObjectModel;
-          this.seqs = { ...(this.model.seqs ?? {}) };
+          await this.seedModel();
           this.consecutiveFailures = 0;
           this.rebuildState();
           this.log('info', 'reconnected');

@@ -276,6 +276,16 @@ const server = createServer(async (req, res) => {
     case '/rr_model': {
       const key = url.searchParams.get('key') ?? '';
       const flags = url.searchParams.get('flags') ?? '';
+
+      // Asking for the WHOLE model verbose is the largest response the firmware
+      // can be made to produce, and a real board can simply fail to deliver it.
+      // A mock that cheerfully returns it hides that, so drop the connection
+      // exactly as the board does — clients must fetch per key instead.
+      if (!key && flags.includes('v')) {
+        req.destroy();
+        return;
+      }
+
       const live = flags.includes('f') && !flags.includes('v');
       const model = buildModel(live);
       const result = key ? key.split('.').reduce((o, k) => (o ? o[k] : undefined), model) : model;

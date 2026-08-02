@@ -101,12 +101,17 @@ export class RrfClient {
       // A cross-origin fetch that trips CORS surfaces as an opaque network
       // failure ("Load failed" in Safari, "Failed to fetch" in Chrome) with no
       // detail, so say what it almost certainly is rather than echoing that.
+      // A fetch that dies below HTTP level gives no detail ("Load failed" in
+      // Safari, "Failed to fetch" in Chrome). Don't assert a cause we can't
+      // observe — name the candidates, in the order they're actually likely.
       const detail = (e as Error).message;
+      const url = this.url(endpoint, params);
       throw new RrfError(
-        this.sameOrigin
-          ? `network error calling ${endpoint}: ${detail} — is the controller reachable?`
-          : `network error calling ${endpoint}: ${detail} — cross-origin request blocked. ` +
-            `Check M586 C"*" is set in config-network.g, and that the controller is reachable over plain http.`,
+        `network error calling ${endpoint}: ${detail}. ` +
+          `The controller closed the connection or was unreachable. ` +
+          `Open ${url} directly in a browser tab — if that also fails, it is the ` +
+          `controller, not CORS.` +
+          (this.sameOrigin ? '' : ` If it loads fine there, check M586 C"*" in config-network.g.`),
       );
     }
 
