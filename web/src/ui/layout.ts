@@ -22,7 +22,8 @@ export interface PanelInstance {
 
 const DEFAULT_LAYOUT: PanelInstance[] = [
   { key: 'dro-1', id: 'dro', width: 5, height: 320 },
-  { key: 'jog-1', id: 'jog', width: 4, height: 320 },
+  // Tall enough for the XY pad, Z column and an aux-axis row without scrolling.
+  { key: 'jog-1', id: 'jog', width: 4, height: 360 },
   { key: 'status-1', id: 'status', width: 3, height: 320 },
   { key: 'viewer-1', id: 'viewer', width: 8, height: 460 },
   { key: 'console-1', id: 'console', width: 4, height: 460 },

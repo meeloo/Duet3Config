@@ -261,14 +261,17 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .jog { padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; height: 100%; }
 .jog-settings { display: flex; flex-direction: column; gap: 6px; }
 .jog-setting { display: flex; flex-direction: column; gap: 3px; }
-.jog-pads { display: flex; gap: 14px; justify-content: center; align-items: center; flex: 1; }
-.jog-xy { display: grid; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 46px); gap: 4px; }
-.jog-z { display: grid; grid-template-rows: repeat(3, 46px); gap: 4px; }
+/* Don't let the XY/Z pads grow: they would push any aux-axis row (the U dust
+   shoe on this machine) past the bottom of the panel, where reaching a primary
+   motion control would need a scroll. */
+.jog-pads { display: flex; gap: 14px; justify-content: center; align-items: center; flex: 0 0 auto; }
+.jog-xy { display: grid; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 42px); gap: 4px; }
+.jog-z { display: grid; grid-template-rows: repeat(3, 42px); gap: 4px; }
 .jog-btn { min-height: 0; height: 100%; width: 100%; font-size: 17px; padding: 0; touch-action: none; }
 .jog-btn.home { font-size: 15px; color: var(--text-dim); }
-.jog-aux { display: flex; flex-direction: column; gap: 4px; }
+.jog-aux { display: flex; flex-direction: column; gap: 4px; margin-top: auto; }
 .jog-aux-row { display: flex; gap: 4px; align-items: center; }
-.jog-aux-row .jog-btn { width: 46px; height: 34px; }
+.jog-aux-row .jog-btn { width: 46px; height: 32px; }
 .jog-blocked { text-align: center; color: var(--warn); font-size: 12px; }
 
 /* ---------- Status ---------- */
