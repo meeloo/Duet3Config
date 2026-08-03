@@ -185,6 +185,19 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 }
 .conn-settings label { display: flex; gap: 8px; align-items: center; font-size: 13px; }
 .conn-settings p { margin: 0; }
+/* Shared settings, inside the connection drawer. */
+.sync-settings { display: flex; flex-direction: column; gap: 6px; padding-top: 8px;
+  border-top: 1px solid var(--border); flex-basis: 100%; }
+.sync-head { display: flex; align-items: baseline; gap: 8px; }
+.sync-head span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--text-faint); font-weight: 600; }
+.sync-head code { font-size: 11px; color: var(--text-dim); }
+.sync-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.sync-follow { display: flex; align-items: center; gap: 6px; font-size: 12px;
+  color: var(--text-dim); }
+.sync-follow input { width: 15px; height: 15px; min-height: 0; }
+.hint.warn { color: var(--warn); }
+
 .conn-error {
   padding: 8px 14px;
   background: var(--tint-bad);
