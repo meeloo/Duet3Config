@@ -184,9 +184,56 @@ function installPointerEvents(): void {
     return target.dispatchEvent(event);
   };
 
+  // --- Scrolling ----------------------------------------------------------
+  //
+  // Driven from here rather than left to the browser.
+  //
+  // Every CSS-level remedy for this was tried against a real iOS 12 iPad and
+  // none of them made a panel scroll: the layout is right (the list is the
+  // scroller, overflowing by a thousand pixels), the momentum property made it
+  // worse, and the same gesture in the same layout scrolls correctly in every
+  // engine available to test against. At that point the native scroller is
+  // simply not a thing that can be relied on here, and the honest move is to
+  // stop relying on it — this device already routes all of its touch input
+  // through this file, so scrolling can come from the same place.
+  //
+  // Only ever active where Pointer Events are missing, which in practice means
+  // iOS 12 and similar vintage. Everywhere else the browser keeps the job.
+
+  interface ScrollDrag {
+    el: Element;
+    startY: number;
+    startX: number;
+    topAt: number;
+    leftAt: number;
+    lastY: number;
+    lastAt: number;
+    velocity: number;
+  }
+  let drag: ScrollDrag | null = null;
+  let glide = 0;
+
+  /** Nearest ancestor that can actually move in the direction asked for. */
+  const scrollerFor = (target: EventTarget | null): Element | null => {
+    let el = target instanceof Element ? target : null;
+    while (el && el !== document.body) {
+      const style = getComputedStyle(el);
+      const scrollable = /auto|scroll/.test(style.overflowY) || /auto|scroll/.test(style.overflowX);
+      if (scrollable && (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1)) {
+        return el;
+      }
+      el = el.parentElement;
+    }
+    return null;
+  };
+
   document.addEventListener(
     'touchstart',
     (e) => {
+      if (glide) {
+        cancelAnimationFrame(glide);
+        glide = 0;
+      }
       if (e.touches.length !== 1) {
         // A second finger means a two-finger gesture — a pinch — not a drag.
         // End the one being synthesised, or the 3D view keeps orbiting from
@@ -194,13 +241,30 @@ function installPointerEvents(): void {
         if (origin && !suppressed) dispatch('pointerup', e.changedTouches[0], e);
         captured = null;
         origin = null;
+        drag = null;
         return;
       }
       suppressed = native;
       if (suppressed) return;
       captured = null;
       origin = e.target;
-      dispatch('pointerdown', e.changedTouches[0], e);
+
+      const touch = e.changedTouches[0];
+      const el = scrollerFor(e.target);
+      drag = el
+        ? {
+            el,
+            startX: touch.clientX,
+            startY: touch.clientY,
+            topAt: el.scrollTop,
+            leftAt: el.scrollLeft,
+            lastY: touch.clientY,
+            lastAt: Date.now(),
+            velocity: 0,
+          }
+        : null;
+
+      dispatch('pointerdown', touch, e);
     },
     true,
   );
@@ -210,18 +274,73 @@ function installPointerEvents(): void {
     (e) => {
       // Multi-touch belongs to whatever is handling the gesture directly.
       if (suppressed || !origin || e.touches.length > 1) return;
-      dispatch('pointermove', e.changedTouches[0], e);
-      // Only once something has claimed the gesture. Otherwise this would kill
-      // scrolling everywhere, which is the opposite of the problem.
-      if (captured && e.cancelable) e.preventDefault();
+      const touch = e.changedTouches[0];
+      dispatch('pointermove', touch, e);
+
+      // A control that captured the pointer owns the gesture — jogging, or
+      // orbiting the 3D view — and must not also scroll the panel behind it.
+      if (captured) {
+        drag = null;
+        if (e.cancelable) e.preventDefault();
+        return;
+      }
+
+      if (!drag) return;
+      const { el } = drag;
+      const before = el.scrollTop;
+      el.scrollTop = drag.topAt - (touch.clientY - drag.startY);
+      el.scrollLeft = drag.leftAt - (touch.clientX - drag.startX);
+
+      // Once it has moved, this gesture is a scroll: take it, so the browser
+      // cannot also act on it and move everything twice.
+      if (el.scrollTop !== before && e.cancelable) e.preventDefault();
+
+      const now = Date.now();
+      const dt = now - drag.lastAt;
+      if (dt > 0) {
+        // Pixels per frame, for the glide after release.
+        drag.velocity = ((drag.lastY - touch.clientY) / dt) * 16;
+        drag.lastY = touch.clientY;
+        drag.lastAt = now;
+      }
     },
     // Not passive, or preventDefault would be ignored.
     { capture: true, passive: false },
   );
 
+  /**
+   * Carry on after the finger leaves.
+   *
+   * Not decoration: a list scrolled only while a finger is down feels broken
+   * on a touch screen, and this is standing in for a scroller that would
+   * normally do it. Decays to a stop in about half a second.
+   */
+  const coast = (el: Element, velocity: number): void => {
+    let v = velocity;
+    const step = () => {
+      v *= 0.94;
+      if (Math.abs(v) < 0.4) {
+        glide = 0;
+        return;
+      }
+      const before = el.scrollTop;
+      el.scrollTop += v;
+      if (el.scrollTop === before) {
+        glide = 0; // hit an end
+        return;
+      }
+      glide = requestAnimationFrame(step);
+    };
+    glide = requestAnimationFrame(step);
+  };
+
   const end = (e: TouchEvent) => {
     if (suppressed || !origin) return;
     dispatch('pointerup', e.changedTouches[0], e);
+    if (drag && Math.abs(drag.velocity) > 1 && Date.now() - drag.lastAt < 100) {
+      coast(drag.el, drag.velocity);
+    }
+    drag = null;
     captured = null;
     origin = null;
   };
