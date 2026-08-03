@@ -30,6 +30,7 @@ export const SYNCED_KEYS = [
   'macros',
   'probeMap',
   'wcsNames',
+  'camera',
   'toolLibraries',
   'viewerProjection',
   'viewerShowTool',
@@ -120,6 +121,8 @@ export function describeKey(key: string): string {
       return 'probe role assignments';
     case 'wcsNames':
       return 'work coordinate system names';
+    case 'camera':
+      return 'camera address and view settings (not its password)';
     case 'toolLibraries':
       return 'tool libraries, and which one is loaded';
     case 'viewerProjection':

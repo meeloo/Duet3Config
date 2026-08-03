@@ -9,6 +9,7 @@ import './job.js';
 import './console.js';
 import './files.js';
 import './macros.js';
+import './camera.js';
 import './om.js';
 import './diagnostics.js';
 import './viewer.js';
