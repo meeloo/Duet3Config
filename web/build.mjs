@@ -60,14 +60,43 @@ if (!existsSync(resolve(root, 'node_modules'))) {
   fail('node_modules is missing');
 }
 
+/**
+ * Check every declared dependency before esbuild gets a chance to.
+ *
+ * Guarding only the packages this script itself opens is not enough: a
+ * dependency imported by `src/` fails inside the bundler, as a resolution error
+ * with a stack trace and no mention of npm. Reading the manifest means a package
+ * added later is covered without anyone remembering to add it here — which is
+ * the whole failure mode, since `git pull` brings in a new dependency but never
+ * installs it.
+ */
+function checkDependencies() {
+  const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+  const declared = Object.keys({ ...manifest.dependencies, ...manifest.devDependencies });
+  const missing = declared.filter((pkg) => {
+    try {
+      require.resolve(`${pkg}/package.json`);
+      return false;
+    } catch {
+      // Some packages don't export their package.json; fall back to the entry.
+      try {
+        require.resolve(pkg);
+        return false;
+      } catch {
+        return true;
+      }
+    }
+  });
+  if (missing.length) {
+    fail(`not installed: ${missing.join(', ')}`);
+  }
+}
+
+checkDependencies();
+
 // Imported dynamically so a missing install is reported by fail() above rather
 // than as an ERR_MODULE_NOT_FOUND stack trace before any of it runs.
-let esbuild;
-try {
-  esbuild = await import('esbuild');
-} catch {
-  fail('dependency "esbuild" is not installed');
-}
+const esbuild = await import('esbuild');
 
 mkdirSync('dist', { recursive: true });
 
