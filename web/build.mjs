@@ -23,6 +23,9 @@ mkdirSync('dist', { recursive: true });
 /** Copy public/ verbatim, then gzip every text asset for the Duet. */
 function emitStatic() {
   cpSync('public', 'dist', { recursive: true });
+  // dockview ships its own stylesheet; serve it beside ours rather than
+  // inlining it, so it caches separately and stays easy to diff on upgrade.
+  cpSync('node_modules/dockview-core/dist/styles/dockview.css', 'dist/dockview.css');
 }
 
 /** Write .gz siblings for anything the Duet will serve compressed. */

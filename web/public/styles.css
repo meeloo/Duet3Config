@@ -195,16 +195,6 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 
 /* ---------- Dashboard grid ---------- */
 
-.dashboard {
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap: 8px;
-  padding: 8px;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
 /* Page tabs */
 .pages {
   display: flex; align-items: center; gap: 4px;
@@ -228,55 +218,62 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
   border-color: transparent; color: var(--text-faint); font-size: 16px; }
 .page-add:hover { background: var(--bg-raised); border-color: var(--border); }
 .page-rename { min-height: 30px; padding: 2px 8px; width: 120px; font-size: 13px; }
-.rows-select select { min-height: 28px; padding: 2px 6px; font-size: 11px;
-  background: transparent; border-color: var(--border); }
-.page-empty { grid-column: 1 / -1; display: grid; place-items: center;
-  color: var(--text-faint); font-size: 13px; }
 
-/* Below this width a grid cell cannot hold a useful panel, so the page is
-   allowed to scroll — a phone is not the shop-floor case this is built for. */
-@media (max-width: 900px) {
-  html, body { overflow: auto; }
-  #app { height: auto; min-height: 100dvh; }
-  .dashboard { grid-template-columns: 1fr; grid-template-rows: none !important;
-    overflow: visible; }
-  .dashboard .panel { grid-column: 1 / -1 !important; grid-row: auto !important;
-    min-height: 320px; }
+/* Dockview host. One surface per page; only the active one is displayed. */
+.dv-container { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+.dv-host { position: absolute; inset: 0; }
+.dv-panel { height: 100%; width: 100%; overflow: hidden; display: flex; }
+.dv-panel > * { flex: 1; min-width: 0; min-height: 0; overflow: auto; }
+
+/* Map dockview's theme variables onto the app palette so it follows the
+   light/dark toggle instead of shipping a second, unrelated colour scheme.
+   These target dockview's own shell element — it creates one inside our
+   container and applies the theme class there, so variables set on the
+   container alone are shadowed and have no effect. */
+.dv-host .dv-shell {
+  --dv-background-color: var(--bg-panel);
+  --dv-paneview-active-outline-color: var(--accent);
+  --dv-tabs-and-actions-container-background-color: var(--bg-raised);
+  --dv-group-view-background-color: var(--bg-panel);
+  --dv-tabs-container-scrollbar-color: var(--border-strong);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--bg-panel);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--bg-raised);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--bg-panel);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--bg-raised);
+  --dv-activegroup-visiblepanel-tab-color: var(--text);
+  --dv-activegroup-hiddenpanel-tab-color: var(--text-faint);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--text-dim);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--text-faint);
+  --dv-separator-border: var(--border);
+  --dv-paneview-header-border-color: var(--border);
+  --dv-drag-over-background-color: var(--tint-accent);
+  --dv-drag-over-border-color: var(--accent);
+  --dv-tab-divider-color: var(--border);
+  --dv-active-sash-color: var(--accent);
+  --dv-icon-hover-background-color: var(--bg-raised);
+  --dv-floating-box-shadow: 0 8px 32px var(--shadow);
+}
+/* Tabs are the panel titles now, so give them the same weight the old headers had. */
+.dv-host .dv-default-tab-content {
+  font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.dv-host .dv-tabs-and-actions-container { border-bottom: 1px solid var(--border); }
+
+
 }
 
-.panel {
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  position: relative;
-  min-width: 0;
-}
-.panel.dragging { outline: 2px dashed var(--accent); opacity: 0.7; }
 
-.panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 8px 6px 12px;
-  background: var(--bg-raised);
-  border-bottom: 1px solid var(--border);
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
-  flex: 0 0 auto;
-}
-.panel-head:active { cursor: grabbing; }
-.panel-title { font-size: 12px; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.07em; color: var(--text-dim); }
-.panel-tools { display: flex; gap: 4px; align-items: center; }
-.width-select { min-height: 26px; padding: 2px 4px; font-size: 11px; background: transparent; border-color: transparent; }
-.width-select:hover { border-color: var(--border); }
 
-.panel-body { flex: 1; overflow: auto; min-height: 0; }
-.panel-body > * { display: block; height: 100%; }
+
+
+
+
+
+
+
+
+
+
 
 .picker {
   position: fixed; right: 18px; top: 96px;

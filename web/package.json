@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "dockview-core": "^7.0.4",
     "lit": "^3.2.1"
   },
   "devDependencies": {
