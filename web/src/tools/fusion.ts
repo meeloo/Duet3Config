@@ -36,7 +36,7 @@ export interface ImportedTool {
   note: string | null;
 }
 
-export interface ToolLibrary {
+export interface FusionLibrary {
   tools: ImportedTool[];
   /** Entries that were not cutting tools, or carried no tool number. */
   skipped: string[];
@@ -55,7 +55,7 @@ export interface ToolLibrary {
   duplicateNumbers: number[];
 }
 
-export class ToolLibraryError extends Error {}
+export class FusionLibraryError extends Error {}
 
 const MM_PER_INCH = 25.4;
 
@@ -64,7 +64,7 @@ const MM_PER_INCH = 25.4;
  *
  * Async only because inflating is — the parsing itself is synchronous.
  */
-export async function readToolLibrary(bytes: Uint8Array): Promise<ToolLibrary> {
+export async function readFusionLibrary(bytes: Uint8Array): Promise<FusionLibrary> {
   return parseToolLibrary(await textOf(bytes));
 }
 
@@ -77,26 +77,26 @@ async function textOf(bytes: Uint8Array): Promise<string> {
     entries.find((e) => /\.json$/i.test(e.name)) ??
     null;
   if (!json) {
-    throw new ToolLibraryError(
+    throw new FusionLibraryError(
       `the archive holds no JSON (${entries.map((e) => e.name).join(', ') || 'it is empty'})`,
     );
   }
   return new TextDecoder().decode(json.bytes);
 }
 
-export function parseToolLibrary(text: string): ToolLibrary {
+export function parseToolLibrary(text: string): FusionLibrary {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
-    throw new ToolLibraryError('this is not a JSON file');
+    throw new FusionLibraryError('this is not a JSON file');
   }
 
   // A library is `{data: [...], version: n}`; be willing to take a bare array
   // too, since that is what falls out of hand-editing one.
   const container = raw as { data?: unknown; version?: unknown };
   const data = Array.isArray(raw) ? raw : Array.isArray(container?.data) ? container.data : null;
-  if (!data) throw new ToolLibraryError('this is not a Fusion 360 tool library');
+  if (!data) throw new FusionLibraryError('this is not a Fusion 360 tool library');
 
   const version = typeof container?.version === 'number' ? container.version : null;
   const tools: ImportedTool[] = [];

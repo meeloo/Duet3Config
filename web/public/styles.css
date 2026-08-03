@@ -823,20 +823,37 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
   font-weight: 600; }
 
+.tool-library-bar { display: flex; align-items: center; gap: 6px; padding: 0 12px 8px; }
+.library-select { flex: 1; min-width: 0; font-size: 12px; }
+.library-gear { min-height: 36px; font-size: 15px; color: var(--text-dim); flex: 0 0 auto; }
+
+.library-current { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px;
+  padding: 8px 10px; background: var(--bg-raised); border-radius: var(--radius); }
+.library-current strong { font-size: 15px; }
+.library-current em { font-style: normal; color: var(--text-faint); font-size: 12px; }
+.library-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.library-actions button { flex: 1 1 auto; }
+
 /* The file input itself is hidden; the label is the button. */
-.tool-import { position: relative; overflow: hidden; cursor: pointer;
-  text-transform: none; letter-spacing: 0; font-weight: 400; }
-.tool-import input[type="file"] { position: absolute; inset: 0; opacity: 0;
+.library-import { position: relative; display: flex; align-items: center; gap: 10px;
+  cursor: pointer; padding-top: 12px; border-top: 1px solid var(--border); }
+.library-import input[type="file"] { position: absolute; inset: 0; opacity: 0;
   width: 100%; cursor: pointer; }
-.tool-import span { display: inline-block; padding: 3px 8px; font-size: 11px;
-  border: 1px solid var(--border-strong); border-radius: var(--radius);
-  color: var(--text-dim); background: var(--bg-raised); }
-.tool-import:hover span { border-color: var(--accent); color: var(--text); }
+.library-import span { padding: 8px 14px; border: 1px solid var(--border-strong);
+  border-radius: var(--radius); background: var(--bg-raised); white-space: nowrap; }
+.library-import:hover span { border-color: var(--accent); }
 
 .modal.wide { max-width: 640px; }
 /* Not .modal-message — that is pre-wrap, for machine text that must keep its
    own line breaks, and prose written across source lines comes out shredded. */
 .import-intro { color: var(--text-dim); margin: 0 0 14px; line-height: 1.5; font-size: 13px; }
+.import-target { display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  flex-wrap: wrap; }
+.import-target label { display: flex; align-items: center; gap: 6px; font-size: 12px;
+  color: var(--text-dim); }
+.import-target select { font-size: 12px; }
+.import-name { flex: 1; min-width: 140px; font-size: 12px; }
+.import-target .hint { font-style: normal; }
 .import-renumber { display: flex; align-items: center; gap: 6px; margin-bottom: 10px;
   font-size: 12px; color: var(--text-dim); cursor: pointer; }
 .import-rows { display: flex; flex-direction: column; gap: 2px;
@@ -945,3 +962,5 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .ov-slider { width: 100%; min-height: 0; padding: 0; accent-color: var(--accent);
   background: transparent; border: 0; }
 .overrides p.hint { margin: 0; line-height: 1.5; }
+
+.tool-missing { font-style: normal; color: var(--warn); font-size: 11px; white-space: nowrap; }

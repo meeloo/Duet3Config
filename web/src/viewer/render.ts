@@ -336,10 +336,12 @@ export class ToolpathRenderer {
       const s = axisLen * 0.6;
       seg([x - s, y, z], [x + s, y, z], p.cutter);
       seg([x, y - s, z], [x, y + s, z], p.cutter);
-      // With the tool drawn, the vertical whisker would run up inside it and be
-      // the only thing visible when zoomed in close. The cross alone still
-      // marks the tip, which is all it was ever for.
-      if (!tool) seg([x, y, z], [x, y, z + s * 2], p.cutter);
+      // Kept even when the tool is drawn. The crosshair is sized against the
+      // bed, the tool against itself, so on a 1500mm bed a 6mm cutter is three
+      // pixels wide and the crosshair is the only thing that finds it. Zoomed
+      // in it is a thin line up the axis of a see-through wireframe, which
+      // costs nothing.
+      seg([x, y, z], [x, y, z + s * 2], p.cutter);
 
       if (tool) {
         const v = tool.vertices;

@@ -11,27 +11,41 @@ import { actions, capabilities, connected, machine, run } from '../core/store.js
 import { BUSY_STATES } from '../machine/types.js';
 import {
   TOOL_TYPES,
+  activeLibrary,
+  createLibrary,
+  deleteLibrary,
   describeTool,
+  duplicateLibrary,
   emptyGeometry,
   getTool,
+  loadLibraries,
   loadTools,
+  renameLibrary,
   saveTools,
+  setActiveLibrary,
+  type LibraryState,
   type ToolGeometry,
   type ToolInfo,
   type ToolType,
 } from '../tools/table.js';
-import { readToolLibrary, type ToolLibrary } from '../tools/fusion.js';
+import { readFusionLibrary, type FusionLibrary } from '../tools/fusion.js';
 
 const RPM_PRESETS = [6000, 9000, 12000, 15000, 18000, 24000];
 
 export class SpindlePanel extends PanelElement {
   private rpm = 12000;
+  private libraries: LibraryState = loadLibraries();
   private tools = loadTools();
   private editing: number | null = null;
+  /** Whether the library setup dialog is showing. */
+  private managing = false;
 
   // --- Library import -----------------------------------------------------
   /** Parsed but not yet applied; the operator sees it before the table moves. */
-  private library: ToolLibrary | null = null;
+  private library: FusionLibrary | null = null;
+  /** Where an import lands: an existing library's id, or '' for a new one. */
+  private importInto = '';
+  private importName = '';
   /** Rows the operator has unticked in the preview, by position in the list. */
   private excluded = new Set<number>();
   /** Assign 1…N in library order, for libraries that number nothing. */
@@ -76,6 +90,56 @@ export class SpindlePanel extends PanelElement {
     this.updateTool(number, { geometry: { ...current, ...patch } });
   }
 
+  // --- Libraries ----------------------------------------------------------
+
+  /** Re-read after anything that could have changed which table is in play. */
+  private refreshLibraries(): void {
+    this.libraries = loadLibraries();
+    this.tools = loadTools();
+    this.editing = null;
+    this.requestUpdate();
+  }
+
+  private switchLibrary(id: string): void {
+    setActiveLibrary(id);
+    this.refreshLibraries();
+  }
+
+  private newLibrary(): void {
+    const name = prompt('Name for the new tool library', 'New library');
+    if (name === null) return;
+    createLibrary(name);
+    this.refreshLibraries();
+  }
+
+  private renameActive(): void {
+    const current = activeLibrary(this.libraries);
+    const name = prompt('Rename this tool library', current.name);
+    if (name === null) return;
+    renameLibrary(current.id, name);
+    this.refreshLibraries();
+  }
+
+  private duplicateActive(): void {
+    duplicateLibrary(this.libraries.active);
+    this.refreshLibraries();
+  }
+
+  private deleteActive(): void {
+    const current = activeLibrary(this.libraries);
+    const count = Object.keys(current.tools).length;
+    if (
+      !confirm(
+        `Delete the tool library “${current.name}”?\n\n` +
+          `${count} tool${count === 1 ? '' : 's'} will be lost. This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    deleteLibrary(current.id);
+    this.refreshLibraries();
+  }
+
   // --- Library import -----------------------------------------------------
 
   private async loadLibrary(file: File): Promise<void> {
@@ -84,7 +148,7 @@ export class SpindlePanel extends PanelElement {
     this.library = null;
     this.requestUpdate();
     try {
-      const library = await readToolLibrary(new Uint8Array(await file.arrayBuffer()));
+      const library = await readFusionLibrary(new Uint8Array(await file.arrayBuffer()));
       if (!library.tools.length) {
         throw new Error(
           library.skipped.length
@@ -97,12 +161,41 @@ export class SpindlePanel extends PanelElement {
       // A library that numbers nothing is useless as-is, so the offer to number
       // it starts accepted; one that numbers properly is never touched.
       this.renumber = library.duplicateNumbers.length > 0;
+      this.chooseDestination(file.name);
+      // Hand over to the preview rather than stacking two dialogs. A failure
+      // stays behind, where the error sits next to the button that caused it.
+      this.managing = false;
     } catch (err) {
       this.importError = (err as Error).message;
     } finally {
       this.importBusy = false;
       this.requestUpdate();
     }
+  }
+
+  /**
+   * Where an import should land, before the operator says otherwise.
+   *
+   * A file exported from Fusion is named after the library it came from, which
+   * is nearly always what the local library wants to be called too — so
+   * "Guitars.tools" offers to become a library called Guitars, and importing it
+   * again later offers to update that same one rather than making a second.
+   */
+  private chooseDestination(fileName: string): void {
+    const suggested = fileName.replace(/\.(tools|json)$/i, '').replace(/[_-]+/g, ' ').trim();
+    this.importName = suggested || 'Imported tools';
+
+    const match = this.libraries.libraries.find(
+      (l) => l.name.toLowerCase() === this.importName.toLowerCase(),
+    );
+    if (match) {
+      this.importInto = match.id;
+      return;
+    }
+    // Nothing has been set up yet: fill the empty library that already exists
+    // rather than leaving it behind as clutter.
+    const only = this.libraries.libraries.length === 1 ? this.libraries.libraries[0] : null;
+    this.importInto = only && !Object.keys(only.tools).length ? only.id : '';
   }
 
   /**
@@ -120,18 +213,28 @@ export class SpindlePanel extends PanelElement {
   private applyLibrary(): void {
     const library = this.library;
     if (!library) return;
+
+    const target = this.libraries.libraries.find((l) => l.id === this.importInto);
     // Merge rather than replace: a library covers the tools it covers, and a
     // slot the operator filled in by hand is not evidence of anything wrong.
-    const next = { ...this.tools };
+    const next: Record<number, ToolInfo> = { ...(target?.tools ?? {}) };
     library.tools.forEach((tool, index) => {
       if (this.excluded.has(index)) return;
       const number = this.importNumber(index);
       next[number] = { ...tool.info, number };
     });
-    this.tools = next;
-    saveTools(this.tools);
+
+    if (target) {
+      // Switching to it is the point of importing it — otherwise the tools
+      // land somewhere the panel isn't showing and nothing appears to happen.
+      setActiveLibrary(target.id);
+      saveTools(next);
+    } else {
+      createLibrary(this.importName, next);
+    }
+
     this.library = null;
-    this.requestUpdate();
+    this.refreshLibraries();
   }
 
   // --- Actions -----------------------------------------------------------
@@ -355,24 +458,108 @@ export class SpindlePanel extends PanelElement {
     `;
   }
 
-  // --- Library import UI --------------------------------------------------
+  // --- Library UI ---------------------------------------------------------
 
-  private renderImportButton(): TemplateResult {
+  /**
+   * Which set of tools the carousel is loaded with.
+   *
+   * Front and centre rather than tucked in a settings page, because having the
+   * wrong one selected mislabels every tool in the machine — the same reason
+   * the active tool is stated large at the top. Everything that *manages*
+   * libraries is behind the gear: setting them up is a rare job, and switching
+   * between them is not.
+   */
+  private renderLibraryBar(): TemplateResult {
+    const state = this.libraries;
+    const current = activeLibrary(state);
+
     return html`
-      <label class="tool-import" title="Fusion 360 → Manage → Tool Library → right-click → Export">
-        <input
-          type="file"
-          accept=".tools,.json,application/json"
-          @change=${(e: Event) => {
-            const input = e.target as HTMLInputElement;
-            const file = input.files?.[0];
-            // Clear it, so choosing the same file twice still fires a change.
-            input.value = '';
-            if (file) void this.loadLibrary(file);
-          }}
-        />
-        <span>${this.importBusy ? 'Reading…' : 'Import library…'}</span>
-      </label>
+      <div class="tool-library-bar">
+        <select
+          class="library-select"
+          title="Which tool library the changer is loaded with"
+          @change=${(e: Event) => this.switchLibrary((e.target as HTMLSelectElement).value)}
+        >
+          ${state.libraries.map(
+            (l) => html`<option value=${l.id} ?selected=${l.id === current.id}>
+              ${l.name} (${Object.keys(l.tools).length})
+            </option>`,
+          )}
+        </select>
+        <button
+          class="icon library-gear"
+          title="Set up tool libraries"
+          aria-label="Set up tool libraries"
+          @click=${() => ((this.managing = true), this.requestUpdate())}
+        >
+          ⚙
+        </button>
+      </div>
+    `;
+  }
+
+  private renderLibrarySetup(): TemplateResult | typeof nothing {
+    if (!this.managing) return nothing;
+    const current = activeLibrary(this.libraries);
+    const count = Object.keys(current.tools).length;
+    const only = this.libraries.libraries.length < 2;
+
+    return html`
+      <div class="modal-backdrop">
+        <div class="modal" role="dialog" aria-modal="true">
+          <h2>Tool libraries</h2>
+          <p class="import-intro">
+            A library is one set of tools in the changer — the cutters for guitar work are not
+            the ones for metal. Switching library says the pockets now hold these.
+          </p>
+
+          <div class="library-current">
+            <strong>${current.name}</strong>
+            <em>${count} tool${count === 1 ? '' : 's'}</em>
+          </div>
+
+          <div class="library-actions">
+            <button @click=${() => this.newLibrary()}>New…</button>
+            <button @click=${() => this.renameActive()}>Rename…</button>
+            <button @click=${() => this.duplicateActive()}>Duplicate</button>
+            <button
+              class="danger"
+              ?disabled=${only}
+              title=${only ? 'The last library cannot be deleted' : 'Delete this library'}
+              @click=${() => this.deleteActive()}
+            >
+              Delete
+            </button>
+          </div>
+
+          <label
+            class="library-import"
+            title="Fusion 360 → Manage → Tool Library → right-click the library → Export"
+          >
+            <input
+              type="file"
+              accept=".tools,.json,application/json"
+              @change=${(e: Event) => {
+                const input = e.target as HTMLInputElement;
+                const file = input.files?.[0];
+                // Clear it, so choosing the same file twice still fires a change.
+                input.value = '';
+                if (file) void this.loadLibrary(file);
+              }}
+            />
+            <span>${this.importBusy ? 'Reading…' : 'Import from Fusion 360…'}</span>
+            <em class="hint">A .tools export, or the .json inside one</em>
+          </label>
+
+          ${this.importError ? html`<div class="warn-banner">${this.importError}</div>` : nothing}
+
+          <div class="modal-buttons">
+            <button class="primary" @click=${() => ((this.managing = false), this.requestUpdate())}>
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
     `;
   }
 
@@ -390,6 +577,36 @@ export class SpindlePanel extends PanelElement {
             Tool numbers come from the library's post-processor settings, so they match what
             Fusion posts. Tools not listed here are left alone.
           </p>
+
+          <div class="import-target">
+            <label>
+              <span>Into</span>
+              <select
+                @change=${(e: Event) => {
+                  this.importInto = (e.target as HTMLSelectElement).value;
+                  this.requestUpdate();
+                }}
+              >
+                <option value="" ?selected=${!this.importInto}>New library…</option>
+                ${this.libraries.libraries.map(
+                  (l) => html`<option value=${l.id} ?selected=${l.id === this.importInto}>
+                    ${l.name}
+                  </option>`,
+                )}
+              </select>
+            </label>
+            ${!this.importInto
+              ? html`
+                  <input
+                    type="text"
+                    class="import-name"
+                    aria-label="Name for the new library"
+                    .value=${this.importName}
+                    @input=${(e: Event) => (this.importName = (e.target as HTMLInputElement).value)}
+                  />
+                `
+              : html`<em class="hint">Existing tools in it are kept unless a number matches.</em>`}
+          </div>
 
           ${library.duplicateNumbers.length
             ? html`
@@ -411,7 +628,10 @@ export class SpindlePanel extends PanelElement {
             ${library.tools.map((tool, index) => {
               const number = this.importNumber(index);
               const info = tool.info;
-              const existing = this.tools[number];
+              // What it displaces in the library it is going into, which is not
+              // necessarily the one on screen behind the dialog.
+              const existing = this.libraries.libraries.find((l) => l.id === this.importInto)
+                ?.tools[number];
               const on = !this.excluded.has(index);
               return html`
                 <label class="import-row ${on ? '' : 'off'}">
@@ -474,21 +694,23 @@ export class SpindlePanel extends PanelElement {
     return html`
       <div class="spindle-panel">
         ${this.renderActiveTool()} ${this.renderSpindle()}
-        ${this.importError ? html`<div class="warn-banner">${this.importError}</div>` : nothing}
+        ${this.importError && !this.managing
+          ? html`<div class="warn-banner">${this.importError}</div>`
+          : nothing}
         ${caps.toolChanger && slots > 0
           ? html`
               <div class="tool-list">
                 <div class="tool-list-head">
                   <span>Tool changer</span>
                   <em>${slots} slots · tap a row to edit</em>
-                  ${this.renderImportButton()}
                 </div>
+                ${this.renderLibraryBar()}
                 ${Array.from({ length: slots }, (_, i) => this.renderToolRow(i + 1, false))}
                 ${extraManual.map((n) => this.renderToolRow(n, true))}
               </div>
             `
           : nothing}
-        ${this.renderPreview()}
+        ${this.renderLibrarySetup()} ${this.renderPreview()}
       </div>
     `;
   }

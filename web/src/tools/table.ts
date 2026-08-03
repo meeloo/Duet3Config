@@ -76,18 +76,205 @@ export function emptyGeometry(): ToolGeometry {
   return { shank: 0, flute: 0, length: 0, cornerRadius: 0, tipAngle: 0, tipDiameter: 0 };
 }
 
-type Table = Record<number, ToolInfo>;
-
-export function loadTools(): Table {
-  return loadSetting<Table>('toolTable', {});
-}
-
-export function saveTools(table: Table): void {
-  saveSetting('toolTable', table);
-}
+export type Table = Record<number, ToolInfo>;
 
 export function getTool(table: Table, number: number): ToolInfo {
   return table[number] ?? emptyTool(number);
+}
+
+// --- Libraries ------------------------------------------------------------
+//
+// One table is not enough, because the carousel holds one set of tools at a
+// time and which set that is depends on the work. Guitar work and metal work
+// share a machine, an ATC and a numbering scheme, and share almost no cutters
+// — so T4 is a 6mm compression bit on one day and a carbide slot drill the
+// next. Keeping both in one table means every tool is described wrong half the
+// time, which is worse than describing none of them.
+//
+// Switching library is therefore a claim about the physical machine: "the
+// pockets now hold these". It is stored alongside the libraries and shared
+// with the other browsers, because they are all looking at the same carousel.
+
+export interface ToolLibrary {
+  id: string;
+  name: string;
+  tools: Table;
+}
+
+export interface LibraryState {
+  /** id of the library the carousel is currently loaded with. */
+  active: string;
+  libraries: ToolLibrary[];
+}
+
+/** Superseded by `toolLibraries`; still read once, to carry a table forward. */
+const LEGACY_KEY = 'toolTable';
+const KEY = 'toolLibraries';
+
+const DEFAULT_NAME = 'Default';
+
+function newId(): string {
+  // randomUUID needs a secure context, and this app is routinely served over
+  // plain HTTP from the controller itself.
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  return `lib-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function isTable(value: unknown): value is Table {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  // A tool table is keyed by number; anything else is a different shape that
+  // happened to survive JSON.
+  return Object.entries(value).every(
+    ([key, tool]) => /^\d+$/.test(key) && !!tool && typeof tool === 'object',
+  );
+}
+
+/**
+ * The stored state, repaired into something usable.
+ *
+ * Tolerant on purpose. This key is shared between browsers through the
+ * controller, so a copy written by a different version — or a hand-edited
+ * settings file — has to degrade into a working table rather than into an
+ * empty tool list on a machine that is about to cut something.
+ */
+function normalise(raw: unknown): LibraryState {
+  const state = raw as Partial<LibraryState> | null;
+  const libraries: ToolLibrary[] = [];
+
+  if (state && Array.isArray(state.libraries)) {
+    for (const entry of state.libraries) {
+      if (!entry || typeof entry !== 'object') continue;
+      const tools = isTable(entry.tools) ? entry.tools : {};
+      libraries.push({
+        id: typeof entry.id === 'string' && entry.id ? entry.id : newId(),
+        name: typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim() : DEFAULT_NAME,
+        tools,
+      });
+    }
+  }
+
+  if (!libraries.length) {
+    // First run under the new scheme: whatever single table existed becomes the
+    // first library, so an operator who spent an evening filling one in does
+    // not find it gone.
+    const legacy = loadSetting<unknown>(LEGACY_KEY, null);
+    libraries.push({
+      id: newId(),
+      name: DEFAULT_NAME,
+      tools: isTable(legacy) ? legacy : {},
+    });
+  }
+
+  const active =
+    typeof state?.active === 'string' && libraries.some((l) => l.id === state.active)
+      ? state.active
+      : libraries[0].id;
+
+  return { active, libraries };
+}
+
+export function loadLibraries(): LibraryState {
+  const raw = loadSetting<unknown>(KEY, null);
+  const state = normalise(raw);
+  // Write the migration out the first time rather than re-deriving it on every
+  // load: until it is stored it is not a real setting, so it would not be part
+  // of a push to the machine and the other browsers would never see the table
+  // that was carried forward.
+  if (raw === null) saveSetting(KEY, state);
+  return state;
+}
+
+export function saveLibraries(state: LibraryState): void {
+  saveSetting(KEY, normalise(state));
+}
+
+export function activeLibrary(state: LibraryState = loadLibraries()): ToolLibrary {
+  return state.libraries.find((l) => l.id === state.active) ?? state.libraries[0];
+}
+
+/** The tools in the carousel right now. */
+export function loadTools(): Table {
+  return activeLibrary().tools;
+}
+
+/** Write the carousel's tools back, leaving the other libraries alone. */
+export function saveTools(table: Table): void {
+  const state = loadLibraries();
+  const library = activeLibrary(state);
+  library.tools = table;
+  saveLibraries(state);
+}
+
+export function setActiveLibrary(id: string): void {
+  const state = loadLibraries();
+  if (!state.libraries.some((l) => l.id === id)) return;
+  saveLibraries({ ...state, active: id });
+}
+
+/** Add a library and make it the active one. Returns its id. */
+export function createLibrary(name: string, tools: Table = {}): string {
+  const state = loadLibraries();
+  const id = newId();
+  state.libraries.push({ id, name: uniqueName(state, name), tools });
+  saveLibraries({ ...state, active: id });
+  return id;
+}
+
+export function renameLibrary(id: string, name: string): void {
+  const state = loadLibraries();
+  const library = state.libraries.find((l) => l.id === id);
+  if (!library) return;
+  library.name = uniqueName(state, name, id);
+  saveLibraries(state);
+}
+
+export function duplicateLibrary(id: string): string | null {
+  const state = loadLibraries();
+  const source = state.libraries.find((l) => l.id === id);
+  if (!source) return null;
+  // Structured copy, so editing a tool in the copy cannot reach back into the
+  // original through a shared object.
+  const tools: Table = {};
+  for (const [number, tool] of Object.entries(source.tools)) {
+    tools[Number(number)] = { ...tool, geometry: tool.geometry ? { ...tool.geometry } : undefined };
+  }
+  return createLibrary(`${source.name} copy`, tools);
+}
+
+/**
+ * Remove a library. Refuses to remove the last one — there is always a
+ * carousel, so there is always a table describing it, even an empty one.
+ */
+export function deleteLibrary(id: string): boolean {
+  const state = loadLibraries();
+  if (state.libraries.length < 2) return false;
+  const remaining = state.libraries.filter((l) => l.id !== id);
+  if (remaining.length === state.libraries.length) return false;
+  saveLibraries({
+    active: state.active === id ? remaining[0].id : state.active,
+    libraries: remaining,
+  });
+  return true;
+}
+
+/**
+ * A name no other library is using.
+ *
+ * Two libraries called "Guitars" would be indistinguishable in the one place
+ * it matters — the switcher — and picking the wrong one mislabels every tool
+ * in the machine.
+ */
+function uniqueName(state: LibraryState, name: string, exclude?: string): string {
+  const wanted = name.trim() || DEFAULT_NAME;
+  const taken = (candidate: string) =>
+    state.libraries.some(
+      (l) => l.id !== exclude && l.name.toLowerCase() === candidate.toLowerCase(),
+    );
+  if (!taken(wanted)) return wanted;
+  for (let n = 2; n < 100; n++) {
+    if (!taken(`${wanted} ${n}`)) return `${wanted} ${n}`;
+  }
+  return `${wanted} ${newId().slice(0, 4)}`;
 }
 
 /** Short one-line description for a tool, falling back to the machine's name. */

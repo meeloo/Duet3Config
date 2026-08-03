@@ -286,20 +286,7 @@ export class ViewerPanel extends PanelElement {
       r.progress = programCursor.peek()?.offset ?? -1;
     }
 
-    const visible = state.axes.filter((a) => ['X', 'Y', 'Z'].includes(a.letter));
-    const machineCutter: [number, number, number] | null =
-      visible.length >= 3
-        ? [
-            visible.find((a) => a.letter === 'X')!.work,
-            visible.find((a) => a.letter === 'Y')!.work,
-            visible.find((a) => a.letter === 'Z')!.work,
-          ]
-        : null;
-    // While scrubbing, the crosshair belongs on the simulated point rather than
-    // on the real spindle — the whole purpose is to look somewhere the machine
-    // isn't.
-    const scrubbed = this.manualCursor ? programCursor.peek()?.point ?? null : null;
-    const cutter = scrubbed ?? machineCutter;
+    const cutter = this.cutterPoint();
 
     r.setOverlay(
       cutter,
@@ -308,6 +295,55 @@ export class ViewerPanel extends PanelElement {
       this.activeToolShape(),
     );
     r.render();
+  }
+
+  /** Where the tool tip is, in work coordinates. */
+  private cutterPoint(): [number, number, number] | null {
+    const axes = machine.peek().axes;
+    const at = (letter: string) => axes.find((a) => a.letter === letter);
+    // While scrubbing, the crosshair belongs on the simulated point rather than
+    // on the real spindle — the whole purpose is to look somewhere the machine
+    // isn't.
+    if (this.manualCursor) {
+      const point = programCursor.peek()?.point ?? null;
+      if (point) return point;
+    }
+    const [x, y, z] = [at('X'), at('Y'), at('Z')];
+    return x && y && z ? [x.work, y.work, z.work] : null;
+  }
+
+  /**
+   * Point the camera at the cutter, close enough to see its shape.
+   *
+   * Needed because the tool is drawn at true size and the bed is 1500mm long:
+   * framed on the whole envelope a 6mm cutter is three pixels wide, which
+   * looks exactly like the feature not working. One button gets there.
+   */
+  private frameCutter(): void {
+    const r = this.renderer;
+    const cutter = this.cutterPoint();
+    if (!r || !cutter) return;
+    const shape = this.activeToolShape();
+    const span = shape ? Math.max(shape.height, shape.radius * 4, 10) : 40;
+    // Aimed a little up the shank rather than at the tip, so the tool sits in
+    // the middle of the view instead of hanging off the top of it.
+    r.camera.target = [cutter[0], cutter[1], cutter[2] + span * 0.35];
+    r.camera.distance = span * 2.2;
+  }
+
+  /**
+   * Why no cutter is drawn, when one was asked for.
+   *
+   * Without this the checkbox is ticked, nothing appears, and the only
+   * available conclusion is that it is broken — when the real answer is
+   * usually that the tool has no diameter in the library that is loaded.
+   */
+  private toolMissingReason(): string | null {
+    if (!this.showTool || !connected.get()) return null;
+    const tool = machine.get().tool;
+    if (!tool) return 'no tool loaded';
+    if (this.activeToolShape()) return null;
+    return `T${tool.number} has no diameter`;
   }
 
   /**
@@ -700,6 +736,9 @@ export class ViewerPanel extends PanelElement {
             />
             Tool
           </label>
+          ${this.toolMissingReason()
+            ? html`<em class="hint tool-missing">${this.toolMissingReason()}</em>`
+            : nothing}
           ${caps.jobFilePosition
             ? html`
                 <label class="check">
@@ -744,6 +783,14 @@ export class ViewerPanel extends PanelElement {
               <button class="seg" title=${title} @click=${() => this.setView(name)}>${label}</button>
             `,
           )}
+          <button
+            class="seg"
+            title="Zoom in on the cutter, which is a few pixels wide when the whole bed is in view"
+            ?disabled=${!connected.get()}
+            @click=${() => this.frameCutter()}
+          >
+            Cutter
+          </button>
           <button
             class=${this.pickMode ? 'seg active' : 'seg'}
             title="Click the toolpath to choose a run-from-line point"
