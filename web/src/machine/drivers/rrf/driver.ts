@@ -52,6 +52,8 @@ export class RrfDriver implements MachineDriver {
     // G68/G69, XY plane only. Experimental in RRF but present since 3.4, and
     // 3.6.1 fixed the direction to anticlockwise as the standard requires.
     coordinateRotation: true,
+    // M557 + G29; the K parameter is what keeps it off the tool setter.
+    surfaceMap: true,
     jobFilePosition: true,
     toolChanger: true,
     prompts: true,
@@ -295,6 +297,16 @@ export class RrfDriver implements MachineDriver {
       // Absent `move.rotation` means the firmware wasn't built with coordinate
       // rotation at all; a zero angle means it is supported but not in use.
       // Both surface as null, and the capability flag below tells them apart.
+      // "none" is RRF's own word for no compensation loaded; anything else means
+      // Z is being corrected on every move.
+      compensation:
+        m.move?.compensation && m.move.compensation.type && m.move.compensation.type !== 'none'
+          ? {
+              file: m.move.compensation.file ?? null,
+              mean: m.move.compensation.meshDeviation?.mean ?? null,
+              deviation: m.move.compensation.meshDeviation?.deviation ?? null,
+            }
+          : null,
       rotation:
         m.move?.rotation && m.move.rotation.angle !== 0
           ? {

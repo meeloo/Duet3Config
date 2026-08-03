@@ -38,6 +38,7 @@ export class CarveraDriver implements MachineDriver {
     macros: false,
     workCoordinateSystems: 6,
     coordinateRotation: false,
+    surfaceMap: false,
     jobFilePosition: false,
     toolChanger: true,
     prompts: false,

@@ -112,6 +112,22 @@ export interface Rotation {
   centre: [number, number];
 }
 
+/**
+ * Height-map compensation, when it is switched on.
+ *
+ * Like rotation, this silently changes every move — Z is corrected against the
+ * map — so it has to be visible rather than buried in a controller-specific
+ * corner of the object model.
+ */
+export interface SurfaceCompensation {
+  /** Map file in use, if the controller names one. */
+  file: string | null;
+  /** Mean height error over the probed points, mm. */
+  mean: number | null;
+  /** RMS deviation from that mean, mm. */
+  deviation: number | null;
+}
+
 export interface MachineState {
   status: MachineStatus;
   /** Human-readable controller identity, e.g. "Duet 3 MB6HC / RRF 3.6.0". */
@@ -123,6 +139,8 @@ export interface MachineState {
   wcsCount: number;
   /** Active coordinate rotation, or null when there is none / it is unsupported. */
   rotation: Rotation | null;
+  /** Active height-map compensation, or null when none is loaded. */
+  compensation: SurfaceCompensation | null;
   spindle: Spindle | null;
   job: JobState | null;
   tool: ToolState | null;
@@ -143,6 +161,7 @@ export function emptyMachineState(): MachineState {
     wcs: 1,
     wcsCount: 1,
     rotation: null,
+    compensation: null,
     spindle: null,
     job: null,
     tool: null,
@@ -225,6 +244,8 @@ export interface Capabilities {
   workCoordinateSystems: number;
   /** Can rotate the coordinate system about a point in XY (G68-style). */
   coordinateRotation: boolean;
+  /** Can probe a grid into a height map and compensate Z against it. */
+  surfaceMap: boolean;
   /** Reports byte offset into the running file, enabling live toolpath tracking. */
   jobFilePosition: boolean;
   /** Supports an automatic tool changer workflow. */
@@ -247,6 +268,7 @@ export function defaultCapabilities(): Capabilities {
     macros: false,
     workCoordinateSystems: 0,
     coordinateRotation: false,
+    surfaceMap: false,
     jobFilePosition: false,
     toolChanger: false,
     prompts: false,

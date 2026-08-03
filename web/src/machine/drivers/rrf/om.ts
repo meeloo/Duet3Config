@@ -41,6 +41,14 @@ export interface OmMove {
     angle: number;
     centre: number[];
   };
+  /** Mesh/height-map compensation. `type` is "none" when nothing is loaded. */
+  compensation?: {
+    type?: string;
+    file?: string;
+    meshDeviation?: { mean?: number; deviation?: number };
+    liveGrid?: unknown;
+    probeGrid?: unknown;
+  };
 }
 
 export interface OmMessageBox {

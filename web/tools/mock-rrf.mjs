@@ -36,6 +36,10 @@ const axes = [
   { speed: 8000, letter: 'U', babystep: 0, machinePosition: 30, userPosition: 30, workplaceOffsets: [0,0,0,0,0,0,0,0,0], homed: true, min: 0, max: 60, visible: true },
 ];
 
+/** Probing grid set by M557, and the compensation G29 turns on. */
+let grid = { xMin: 0, xMax: 300, yMin: 0, yMax: 300, sx: 25, sy: 25 };
+let compensation = { type: 'none' };
+
 /** Active work coordinate system, 0 = G54, as move.workplaceNumber reports it. */
 let workplaceNumber = 0;
 /** G68 state. `centre` is machine coordinates, matching the firmware. */
@@ -124,7 +128,45 @@ const FILE_CONTENT = {
   // bars have something to actually report. Small test files hide the whole
   // problem the worker exists to solve.
   '/gcodes/big_relief.nc': generateBigProgram(3 * 1024 * 1024),
+  // Written by G29; replaced whenever a scan is "run".
+  '/sys/heightmap.csv': generateHeightMap({ xMin: 0, xMax: 300, yMin: 0, yMax: 300, sx: 25, sy: 25 }),
 };
+
+/**
+ * A height map with the shape a real spoilboard has — a gentle dish plus a
+ * high corner — and one unprobed point, because the firmware writes bare `0`
+ * for a point it could not reach and the parser has to tell that apart from a
+ * measured 0.000.
+ */
+function generateHeightMap({ xMin, xMax, yMin, yMax, sx, sy }) {
+  const xNum = Math.floor((xMax - xMin) / sx) + 1;
+  const yNum = Math.floor((yMax - yMin) / sy) + 1;
+  const rows = [];
+  const all = [];
+  for (let j = 0; j < yNum; j++) {
+    const cells = [];
+    for (let i = 0; i < xNum; i++) {
+      if (i === 0 && j === yNum - 1) {
+        cells.push('      0');
+        continue;
+      }
+      const u = (i / (xNum - 1)) * 2 - 1;
+      const v = (j / (yNum - 1)) * 2 - 1;
+      const z = -0.22 * (u * u + v * v) + 0.18 * u * v + 0.05 * u + 0.12;
+      all.push(z);
+      cells.push(z.toFixed(3).padStart(7));
+    }
+    rows.push(cells.join(', '));
+  }
+  const mean = all.reduce((a, b) => a + b, 0) / all.length;
+  const dev = Math.sqrt(all.reduce((a, b) => a + (b - mean) ** 2, 0) / all.length);
+  return [
+    `RepRapFirmware height map file v2, mean error ${mean.toFixed(2)}, deviation ${dev.toFixed(2)}`,
+    'xmin,xmax,ymin,ymax,radius,xspacing,yspacing,xnum,ynum',
+    `${xMin.toFixed(2)},${xMax.toFixed(2)},${yMin.toFixed(2)},${yMax.toFixed(2)},-1.00,${sx.toFixed(2)},${sy.toFixed(2)},${xNum},${yNum}`,
+    ...rows,
+  ].join('\n') + '\n';
+}
 
 // Keep listed sizes honest so filePosition/size progress means something.
 for (const entries of Object.values(FILES)) {
@@ -264,6 +306,7 @@ function buildModel(liveOnly) {
       ),
       workplaceNumber,
       rotation: { angle: rotation.angle, centre: [...rotation.centre] },
+      compensation: { ...compensation },
       speedFactor: model_speedFactor,
       currentMove: { requestedSpeed: state.status === 'processing' ? 2400 : 0, topSpeed: 2400 },
     },
@@ -536,6 +579,52 @@ function handleGcode(gcode) {
           Number(y[1]) + axes[1].workplaceOffsets[workplaceNumber],
         ];
         pushReply(`Coordinate rotation ${rotation.angle} deg`);
+        bumpSeq('move');
+      }
+    } else if (upper.startsWith('M557')) {
+      const x = /X(-?[\d.]+):(-?[\d.]+)/.exec(upper);
+      const y = /Y(-?[\d.]+):(-?[\d.]+)/.exec(upper);
+      const sp = /S(-?[\d.]+)(?::(-?[\d.]+))?/.exec(upper);
+      if (x && y && sp) {
+        grid = {
+          xMin: Number(x[1]), xMax: Number(x[2]),
+          yMin: Number(y[1]), yMax: Number(y[2]),
+          sx: Number(sp[1]), sy: Number(sp[2] ?? sp[1]),
+        };
+        pushReply(`Grid set: ${grid.xMin}..${grid.xMax} x ${grid.yMin}..${grid.yMax}`);
+      } else {
+        pushReply('Error: M557: bad grid definition');
+      }
+    } else if (upper.startsWith('G29')) {
+      // RRF's ProbeGrid calls SetZProbeNumber(gb, 'K') first, so a bare G29
+      // silently uses probe 0 — the tool setter on this machine. The mock is
+      // deliberately strict about it so the UI can never get away with omitting K.
+      const sm = /\bS(\d)/.exec(upper);
+      const sparam = sm ? Number(sm[1]) : 0;
+      if (sparam === 0) {
+        const km = /\bK(\d+)/.exec(upper);
+        if (!km) {
+          pushReply('Warning: G29 with no K parameter uses probe 0');
+        }
+        FILE_CONTENT['/sys/heightmap.csv'] = generateHeightMap(grid);
+        compensation = {
+          type: 'mesh',
+          file: '/sys/heightmap.csv',
+          meshDeviation: { mean: 0.041, deviation: 0.118 },
+        };
+        pushReply(`${(Math.floor((grid.xMax - grid.xMin) / grid.sx) + 1) * (Math.floor((grid.yMax - grid.yMin) / grid.sy) + 1)} points probed, mean error 0.041, deviation 0.118`);
+        bumpSeq('move');
+      } else if (sparam === 1) {
+        compensation = {
+          type: 'mesh',
+          file: '/sys/heightmap.csv',
+          meshDeviation: { mean: 0.041, deviation: 0.118 },
+        };
+        pushReply('Height map loaded');
+        bumpSeq('move');
+      } else if (sparam === 2) {
+        compensation = { type: 'none' };
+        pushReply('Bed compensation disabled');
         bumpSeq('move');
       }
     } else if (upper.trim() === 'G69') {
