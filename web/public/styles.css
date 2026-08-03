@@ -409,6 +409,29 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .surf-stats td { padding: 2px 14px 2px 0; font-family: var(--mono);
   font-variant-numeric: tabular-nums; }
 
+/* ---------- Import ---------- */
+
+.import { gap: 10px; }
+.import-drop {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; margin: 12px; padding: 28px 16px; cursor: pointer;
+  border: 2px dashed var(--border-strong); border-radius: var(--radius);
+  background: var(--bg-raised); text-align: center;
+}
+.import-drop:hover { border-color: var(--accent); }
+.import-drop input { display: none; }
+.import-summary { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; padding: 0 12px; }
+.import-file { display: flex; flex-direction: column; min-width: 0; }
+.import-file strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The measured size is the single most important number on this panel: an SVG
+   in pixels and a DXF with no $INSUNITS both look fine until the part comes out
+   25.4x wrong, and this is the only thing that catches it. */
+.import-size { font-family: var(--mono); font-size: 20px; font-weight: 600;
+  white-space: nowrap; }
+.import-size em { font-size: 12px; font-style: normal; color: var(--text-faint); }
+.import-rule { height: 1px; background: var(--border); margin: 2px 12px; }
+
 /* ---------- Jog ---------- */
 
 .jog { padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; height: 100%; }

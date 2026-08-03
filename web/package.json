@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "clipper-lib": "^6.4.2",
     "dockview-core": "^7.0.4",
     "lit": "^3.2.1"
   },

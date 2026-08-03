@@ -78,6 +78,29 @@ export function circlePolygon(
   return pts;
 }
 
+export interface LoopCutOptions {
+  /** Full depth for this pass. */
+  z: number;
+  /** Z to ride at across a tab, or null for no tabs. */
+  tabZ: number | null;
+  tabs: TabSpec;
+  feed: number;
+  plungeFeed: number;
+  toolDiameter: number;
+  /**
+   * Height the descent starts from — the level above, or the stock top. With
+   * `rampLength` this is the top of the ramp.
+   */
+  entryZ?: number;
+  /**
+   * Descend over this many mm of travel along the loop instead of plunging
+   * straight down. A profile cut enters buried in material on every pass after
+   * the first, and a flat end mill driven vertically into that at plunge feed
+   * is how end mills die. 0 keeps the plunge, for a centre-cutting tool.
+   */
+  rampLength?: number;
+}
+
 /**
  * Cut one closed loop at depth `z`, lifting to `tabZ` across each tab.
  *
@@ -87,28 +110,27 @@ export function circlePolygon(
  * each mark and letting the controller interpolate gives ramps in and out of
  * the tab for free — no sampling, no stepped approximation.
  *
- * The ramp is what stops the tool from being asked to climb vertically out of
- * the cut at feed rate. It is one tool diameter long, or half the tab if the
+ * The tab ramp is what stops the tool from being asked to climb vertically out
+ * of the cut at feed rate. It is one tool diameter long, or half the tab if the
  * tab is narrower than that.
  *
- * @param entryFeed feed for the initial plunge to the loop's start depth.
+ * An entry ramp, when asked for, rides the same machinery: the first
+ * `rampLength` of the walk interpolates from `entryZ` down to the depth that
+ * position calls for, and the loop then continues past its start to level that
+ * stretch off. Entry ramps and tabs never collide because tabs sit half a
+ * spacing in from the seam and the entry is at it.
  */
-export function cutLoopWithTabs(
-  g: Gcode,
-  pts: Point[],
-  z: number,
-  tabZ: number | null,
-  tabs: TabSpec,
-  feed: number,
-  entryFeed: number,
-  toolDiameter: number,
-): void {
+export function cutLoopWithTabs(g: Gcode, pts: Point[], o: LoopCutOptions): void {
+  const { z, tabZ, tabs, feed, plungeFeed, toolDiameter } = o;
   const { at, total } = arcLengths(pts);
   const useTabs = tabZ !== null && tabs.count > 0 && tabs.width > 0 && tabZ > z + 1e-6;
+  const entryZ = o.entryZ ?? z;
+  const ramp = Math.min(Math.max(0, o.rampLength ?? 0), total / 2);
+  const descending = ramp > 0 && entryZ > z + 1e-6;
 
-  if (!useTabs) {
+  if (!useTabs && !descending) {
     g.rapid({ x: pts[0][0], y: pts[0][1] });
-    g.feed({ z, f: entryFeed });
+    g.feed({ z, f: plungeFeed });
     for (let i = 1; i <= pts.length; i++) {
       const p = pts[i % pts.length];
       g.feed({ x: p[0], y: p[1], f: feed });
@@ -116,44 +138,63 @@ export function cutLoopWithTabs(
     return;
   }
 
-  const half = Math.min(tabs.width, total / tabs.count / 2) / 2;
-  const ramp = Math.min(Math.max(toolDiameter, 0.5), half * 2);
+  const half = Math.min(tabs.width, total / Math.max(1, tabs.count) / 2) / 2;
+  const tabRamp = Math.min(Math.max(toolDiameter, 0.5), half * 2);
   // Half a spacing in, not on the seam: on a rectangle that lands one tab in
   // the middle of each side instead of straddling the corners, and it keeps the
   // entry plunge off a tab, where it would only reach tab depth.
   const centres = Array.from({ length: tabs.count }, (_, i) => (total * (i + 0.5)) / tabs.count);
 
+  /** Depth at arc position `s`, ignoring the entry ramp. */
   const zAt = (s: number): number => {
     let best = z;
+    if (!useTabs) return best;
     for (const c of centres) {
       const d = circularDistance(s, c, total);
-      if (d <= half) best = Math.max(best, tabZ);
-      else if (d <= half + ramp) {
-        const f = 1 - (d - half) / ramp;
-        best = Math.max(best, z + (tabZ - z) * f);
+      if (d <= half) best = Math.max(best, tabZ!);
+      else if (d <= half + tabRamp) {
+        const f = 1 - (d - half) / tabRamp;
+        best = Math.max(best, z + (tabZ! - z) * f);
       }
     }
     return best;
   };
 
+  /** Depth including the entry ramp, which only affects the first pass round. */
+  const zEntry = (s: number): number =>
+    descending && s < ramp ? entryZ + (zAt(s) - entryZ) * (s / ramp) : zAt(s);
+
   const marks = new Set<number>(at.map((v) => Math.min(v, total)));
-  for (const c of centres) {
-    for (const offset of [-half - ramp, -half, half, half + ramp]) {
-      marks.add((((c + offset) % total) + total) % total);
+  if (useTabs) {
+    for (const c of centres) {
+      for (const offset of [-half - tabRamp, -half, half, half + tabRamp]) {
+        marks.add((((c + offset) % total) + total) % total);
+      }
     }
   }
-  const ordered = [...marks].sort((a, b) => a - b).filter((s, i, arr) => i === 0 || s - arr[i - 1] > 1e-6);
+  if (descending) marks.add(ramp);
+  const ordered = [...marks]
+    .sort((a, b) => a - b)
+    .filter((s, i, arr) => i === 0 || s - arr[i - 1] > 1e-6);
 
-  // Start where the loop starts, at whatever depth that position calls for.
   const start = pointAt(pts, at, total, 0);
   g.rapid({ x: start[0], y: start[1] });
-  g.feed({ z: zAt(0), f: entryFeed });
+  g.feed({ z: zEntry(0), f: plungeFeed });
 
   const stops = ordered.filter((v) => v > 1e-6);
   if (stops[stops.length - 1] < total - 1e-6) stops.push(total);
   for (const s of stops) {
     const p = pointAt(pts, at, total, s);
-    g.feed({ x: p[0], y: p[1], z: zAt(s >= total - 1e-6 ? 0 : s), f: feed });
+    g.feed({ x: p[0], y: p[1], z: zEntry(s >= total - 1e-6 ? 0 : s), f: feed });
+  }
+
+  // The stretch we ramped down over is still high. Go round it once more at the
+  // depth it should have been, so the pass closes at a uniform height.
+  if (descending) {
+    for (const s of [...stops.filter((v) => v < ramp - 1e-6), ramp]) {
+      const p = pointAt(pts, at, total, s);
+      g.feed({ x: p[0], y: p[1], z: zAt(s), f: feed });
+    }
   }
 }
 

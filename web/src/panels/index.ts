@@ -14,6 +14,7 @@ import './viewer.js';
 import './probe.js';
 import './machining.js';
 import './surface.js';
+import './import.js';
 import './preflight.js';
 import './resume.js';
 import './overrides.js';

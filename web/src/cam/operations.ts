@@ -185,7 +185,14 @@ export function rectContour(p: RectContourParams): GeneratedProgram {
     g.blank();
     g.comment(`depth ${z.toFixed(3)}`);
     g.rapid({ z: p.safeZ });
-    cutLoopWithTabs(g, corners, z, tabZ, p.tabs, p.feedRate, p.plungeFeed, p.toolDiameter);
+    cutLoopWithTabs(g, corners, {
+      z,
+      tabZ,
+      tabs: p.tabs,
+      feed: p.feedRate,
+      plungeFeed: p.plungeFeed,
+      toolDiameter: p.toolDiameter,
+    });
   }
 
   g.blank();
@@ -295,16 +302,14 @@ export function circle(p: CircleParams): GeneratedProgram {
       // then is the circle traded for a polygon fine enough that the chord
       // error stays under 0.01mm.
       g.rapid({ z: p.safeZ });
-      cutLoopWithTabs(
-        g,
-        circlePolygon(p.cx, p.cy, effR, cw),
+      cutLoopWithTabs(g, circlePolygon(p.cx, p.cy, effR, cw), {
         z,
         tabZ,
-        p.tabs,
-        p.feedRate,
-        p.plungeFeed,
-        p.toolDiameter,
-      );
+        tabs: p.tabs,
+        feed: p.feedRate,
+        plungeFeed: p.plungeFeed,
+        toolDiameter: p.toolDiameter,
+      });
     }
   }
 
