@@ -107,6 +107,128 @@ class PollingResizeObserver {
 }
 
 /**
+ * Pointer events, from touch events.
+ *
+ * Safari did not implement Pointer Events until 13, which on an iOS 12 iPad
+ * means `pointerdown` never fires — and every motion control in this app is
+ * built on it. Jogging, orbiting the 3D view and driving the camera are all
+ * simply dead there, silently, because a listener that is never called looks
+ * exactly like a button that does nothing.
+ *
+ * Only what this app actually uses is synthesised: one pointer at a time, no
+ * hover, no pressure, no tilt. A full polyfill is a much larger thing and none
+ * of the rest is reachable from here.
+ *
+ * `setPointerCapture` earns a second job. `touch-action: none` is also Safari
+ * 13, so the usual way of saying "this gesture is mine, do not scroll the page"
+ * is unavailable too — but the controls that mean it are exactly the ones that
+ * capture the pointer. So capturing suppresses the browser's own scrolling for
+ * the rest of that gesture, which is what the CSS would have done.
+ */
+function installPointerEvents(): void {
+  if ('PointerEvent' in window || !('ontouchstart' in window)) return;
+
+  /** The element that claimed this gesture, if any. */
+  let captured: Element | null = null;
+  /** Where the gesture started, so a finger that slides off still reports. */
+  let origin: EventTarget | null = null;
+  /** True when the engine turned out to deliver its own pointer events. */
+  let native = false;
+  let suppressed = false;
+
+  // Absence of the constructor is the only thing that can be tested up front,
+  // and it is not proof that the events are missing too. If real ones do turn
+  // up, stand down for that gesture rather than dispatching a second set — a
+  // jog button that fires twice per tap moves the machine twice, which is a
+  // considerably worse bug than the one being fixed. Pointer events precede
+  // touch events, so this is known in time.
+  document.addEventListener(
+    'pointerdown',
+    (e) => {
+      if (e.isTrusted) native = true;
+    },
+    true,
+  );
+
+  const dispatch = (type: string, touch: Touch, source: TouchEvent): boolean => {
+    const target = (captured ?? origin ?? touch.target) as EventTarget;
+    const event = new MouseEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: touch.clientX,
+      clientY: touch.clientY,
+      screenX: touch.screenX,
+      screenY: touch.screenY,
+      button: 0,
+      buttons: type === 'pointerup' ? 0 : 1,
+      shiftKey: source.shiftKey,
+      ctrlKey: source.ctrlKey,
+      altKey: source.altKey,
+      metaKey: source.metaKey,
+    });
+    // MouseEvent has no pointer fields, and handlers read pointerId.
+    for (const [key, value] of Object.entries({
+      pointerId: 1,
+      pointerType: 'touch',
+      isPrimary: true,
+      width: 1,
+      height: 1,
+      pressure: type === 'pointerup' ? 0 : 0.5,
+    })) {
+      Object.defineProperty(event, key, { value, enumerable: true });
+    }
+    return target.dispatchEvent(event);
+  };
+
+  document.addEventListener(
+    'touchstart',
+    (e) => {
+      if (e.touches.length !== 1) return; // pinch and friends are not ours
+      suppressed = native;
+      if (suppressed) return;
+      captured = null;
+      origin = e.target;
+      dispatch('pointerdown', e.changedTouches[0], e);
+    },
+    true,
+  );
+
+  document.addEventListener(
+    'touchmove',
+    (e) => {
+      if (suppressed || !origin) return;
+      dispatch('pointermove', e.changedTouches[0], e);
+      // Only once something has claimed the gesture. Otherwise this would kill
+      // scrolling everywhere, which is the opposite of the problem.
+      if (captured && e.cancelable) e.preventDefault();
+    },
+    // Not passive, or preventDefault would be ignored.
+    { capture: true, passive: false },
+  );
+
+  const end = (e: TouchEvent) => {
+    if (suppressed || !origin) return;
+    dispatch('pointerup', e.changedTouches[0], e);
+    captured = null;
+    origin = null;
+  };
+  document.addEventListener('touchend', end, true);
+  document.addEventListener('touchcancel', end, true);
+
+  const proto = Element.prototype as unknown as Record<string, unknown>;
+  proto.setPointerCapture = function (this: Element): void {
+    captured = this;
+  };
+  proto.releasePointerCapture = function (this: Element): void {
+    if (captured === this) captured = null;
+  };
+  proto.hasPointerCapture = function (this: Element): boolean {
+    return captured === this;
+  };
+}
+
+/**
  * Applied on import rather than exposed as a call the entry point makes: an
  * `import` is hoisted above every statement in the module that writes it, so a
  * call in main.ts would run *after* dockview had already been evaluated.
@@ -117,6 +239,7 @@ export function installCompat(): void {
   if (typeof (window as { ResizeObserver?: unknown }).ResizeObserver === 'undefined') {
     (window as unknown as { ResizeObserver: unknown }).ResizeObserver = PollingResizeObserver;
   }
+  installPointerEvents();
 
   // Flexbox gap arrived in Safari 14.1, and there is no way to ask CSS about it
   // — `@supports (gap: 1px)` is true on Safari 12 because grid gap works there.

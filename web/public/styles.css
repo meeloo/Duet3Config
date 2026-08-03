@@ -263,7 +263,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .dv-container { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 .dv-host { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
 .dv-panel { height: 100%; width: 100%; overflow: hidden; display: flex; }
-.dv-panel > * { flex: 1; min-width: 0; min-height: 0; overflow: auto; }
+.dv-panel > * { flex: 1; min-width: 0; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
 
 /* Map dockview's theme variables onto the app palette so it follows the
    light/dark toggle instead of shipping a second, unrelated colour scheme.
@@ -325,7 +325,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
   display: flex; flex-direction: column;
   box-shadow: 0 8px 32px var(--shadow);
 }
-.picker-list { overflow: auto; padding: 6px; }
+.picker-list { overflow: auto; -webkit-overflow-scrolling: touch; padding: 6px; }
 .picker-item {
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
   width: 100%; text-align: left; background: transparent; border-color: transparent;
@@ -372,7 +372,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 /* The table is the only part allowed to scroll: nine rows times however many
    axes the machine has will not fit every panel size, but the copy row and the
    rotation controls below it must stay reachable without hunting. */
-.wcs-scroll { overflow: auto; min-height: 0; flex: 1 1 auto; }
+.wcs-scroll { overflow: auto; -webkit-overflow-scrolling: touch; min-height: 0; flex: 1 1 auto; }
 .wcs-table { width: 100%; border-collapse: collapse; }
 .wcs-table th {
   font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
@@ -408,7 +408,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 /* ---------- Diagnostics ---------- */
 
 .diagnostics { padding: 10px 12px; display: flex; flex-direction: column; gap: 14px;
-  height: 100%; overflow: auto; }
+  height: 100%; overflow: auto; -webkit-overflow-scrolling: touch; }
 .diag-section { display: flex; flex-direction: column; gap: 5px; }
 .diag-title { display: flex; align-items: center; justify-content: space-between; gap: 8px;
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-faint);
@@ -428,7 +428,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 /* ---------- Surface scan ---------- */
 
 .surface { padding: 10px 12px; display: flex; flex-direction: column; gap: 10px;
-  height: 100%; overflow: auto; }
+  height: 100%; overflow: auto; -webkit-overflow-scrolling: touch; }
 /* The shared .pack-actions pins itself to the bottom, which is right when the
    form is the whole panel. Here the map lives below the buttons, so it isn't. */
 .surface .pack-actions { margin-top: 0; padding: 10px 0 0; }
@@ -481,7 +481,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .macro-confirm { display: flex; align-items: center; gap: 4px; font-size: 11px;
   color: var(--text-dim); white-space: nowrap; cursor: pointer; }
 .macro-confirm input { width: 14px; height: 14px; min-height: 0; }
-.macro-scroll { overflow: auto; min-height: 0; flex: 1 1 auto; }
+.macro-scroll { overflow: auto; -webkit-overflow-scrolling: touch; min-height: 0; flex: 1 1 auto; }
 /* Buttons flow and wrap: the panel can be any width in the dock, and a fixed
    column count would either waste half of a wide one or clip a narrow one. */
 .macro-grid { display: flex; flex-wrap: wrap; gap: 5px; }
@@ -595,7 +595,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 /* ---------- Console ---------- */
 
 .console { display: flex; flex-direction: column; height: 100%; }
-.console-out { flex: 1; overflow: auto; padding: 8px 10px; font-family: var(--mono); font-size: 12px; }
+.console-out { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; padding: 8px 10px; font-family: var(--mono); font-size: 12px; }
 .console-out .line { display: flex; gap: 8px; padding: 1px 0; word-break: break-word; }
 .console-out .time { color: var(--text-faint); flex: 0 0 auto; font-size: 11px; }
 .console-out .text { white-space: pre-wrap; }
@@ -615,7 +615,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
   border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .files-path { font-family: var(--mono); font-size: 11px; color: var(--text-faint);
   margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.files-list { flex: 1; overflow: auto; }
+.files-list { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
 .file-row { display: flex; gap: 8px; align-items: center; padding: 6px 10px;
   cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--border); }
 .file-row:hover { background: var(--bg-raised); }
@@ -641,7 +641,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .om-bar { display: flex; gap: 8px; align-items: center; padding: 6px 8px;
   border-bottom: 1px solid var(--border); }
 .om-bar input { flex: 1; }
-.om-tree { flex: 1; overflow: auto; padding: 4px 0; font-family: var(--mono); font-size: 12px; }
+.om-tree { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; padding: 4px 0; font-family: var(--mono); font-size: 12px; }
 .om-row { display: flex; gap: 8px; align-items: baseline; padding: 2px 10px; }
 .om-row.branch { cursor: pointer; }
 .om-row.branch:hover { background: var(--bg-raised); }
@@ -701,7 +701,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .viewer-error { padding: 6px 10px; color: var(--bad-text); font-size: 12px; }
 .viewer-warn { padding: 6px 10px; color: var(--warn); font-size: 11px; }
 .viewer-picker { position: absolute; top: 40px; left: 8px; right: 8px; max-height: 60%;
-  overflow: auto; background: var(--bg-raised); border: 1px solid var(--border-strong);
+  overflow: auto; -webkit-overflow-scrolling: touch; background: var(--bg-raised); border: 1px solid var(--border-strong);
   border-radius: 8px; z-index: 10; padding: 6px;
   box-shadow: 0 8px 32px var(--shadow); }
 .viewer-picker .picker-item { flex-direction: row; justify-content: space-between; align-items: center; }
@@ -743,7 +743,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 
 .param-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 6px 12px; padding: 10px 12px; overflow: auto;
+  gap: 6px 12px; padding: 10px 12px; overflow: auto; -webkit-overflow-scrolling: touch;
 }
 /* min-width:0 on both the row and the input, because a grid or flex item
    defaults to min-width:auto and refuses to shrink below its content. A <select>
@@ -765,7 +765,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
   padding: 0 0 6px; line-height: 1.5; }
 .param-note code { color: var(--accent); }
 
-.probe-setup { padding: 10px 12px; overflow: auto; display: grid;
+.probe-setup { padding: 10px 12px; overflow: auto; -webkit-overflow-scrolling: touch; display: grid;
   grid-template-columns: 1fr; gap: 4px; }
 .probe-setup p { margin: 0 0 8px; }
 .probe-setup code { color: var(--accent); }
@@ -804,7 +804,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .spindle-controls { display: flex; gap: 6px; }
 .spindle-controls select { flex: 1; min-width: 0; font-family: var(--mono); }
 
-.tool-list { flex: 1; overflow: auto; min-height: 0; border-top: 1px solid var(--border); }
+.tool-list { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; min-height: 0; border-top: 1px solid var(--border); }
 .tool-list-head { display: flex; justify-content: space-between; align-items: baseline;
   padding: 8px 12px 4px; font-size: 11px; text-transform: uppercase;
   letter-spacing: 0.07em; color: var(--text-dim); font-weight: 600; }
@@ -867,7 +867,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .import-renumber { display: flex; align-items: center; gap: 6px; margin-bottom: 10px;
   font-size: 12px; color: var(--text-dim); cursor: pointer; }
 .import-rows { display: flex; flex-direction: column; gap: 2px;
-  max-height: 46vh; overflow: auto; margin-bottom: 12px; }
+  max-height: 46vh; overflow: auto; -webkit-overflow-scrolling: touch; margin-bottom: 12px; }
 .import-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px;
   border-radius: var(--radius); cursor: pointer; }
 .import-row:hover { background: var(--bg-raised); }
@@ -916,7 +916,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .preflight-head.error .preflight-verdict { color: var(--bad); }
 .preflight-file { font-family: var(--mono); font-size: 11px; color: var(--text-dim);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pf-check-list { flex: 1; overflow: auto; min-height: 0; padding: 4px 0; }
+.pf-check-list { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; min-height: 0; padding: 4px 0; }
 .pf-check { display: flex; gap: 9px; padding: 6px 12px; align-items: flex-start; }
 .pf-check-icon { flex: 0 0 auto; width: 17px; height: 17px; border-radius: 50%;
   display: grid; place-items: center; font-size: 11px; font-weight: 700;
@@ -950,7 +950,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 /* ---------- Run from line ---------- */
 
 .resume { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.resume-state { padding: 6px 12px; overflow: auto; }
+.resume-state { padding: 6px 12px; overflow: auto; -webkit-overflow-scrolling: touch; }
 .resume-row { display: flex; justify-content: space-between; gap: 12px;
   padding: 3px 0; font-size: 12px; border-bottom: 1px solid var(--border); }
 .resume-row span { color: var(--text-dim); }
@@ -959,7 +959,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 /* ---------- Overrides ---------- */
 
 .overrides { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px;
-  overflow: auto; height: 100%; }
+  overflow: auto; -webkit-overflow-scrolling: touch; height: 100%; }
 .ov-block { display: flex; flex-direction: column; gap: 7px; padding-bottom: 10px;
   border-bottom: 1px solid var(--border); }
 .ov-block:last-child { border-bottom: 0; }
