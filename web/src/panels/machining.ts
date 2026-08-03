@@ -1,4 +1,4 @@
-// Machining pack: facing, rectangular contour, circular contour/pocket.
+// Machining pack: facing, pockets, contours with holding tabs, and drilling.
 //
 // These retire the hand-edited constants at the top of flattenSpoilboard.g and
 // "Plane Stock.g" — same operations, but with the numbers in a form and the
@@ -9,15 +9,25 @@ import { PanelElement, registerPanel } from '../ui/panel.js';
 import { connected, machine } from '../core/store.js';
 import { checkField, numberField, selectField } from '../ui/widgets.js';
 import { preview, saveAndRun } from '../ui/program.js';
-import { circle, facing, rectContour, type ContourSide } from '../cam/operations.js';
+import {
+  circle,
+  drillPattern,
+  facing,
+  rectContour,
+  rectPocket,
+  type ContourSide,
+  type DrillPattern,
+} from '../cam/operations.js';
 import type { GeneratedProgram } from '../cam/format.js';
 
-type OpId = 'facing' | 'rect' | 'circle';
+type OpId = 'facing' | 'pocket' | 'rect' | 'circle' | 'drill';
 
 const OPS: Array<{ id: OpId; label: string; blurb: string }> = [
   { id: 'facing', label: 'Facing', blurb: 'Raster-surface a rectangular area — stock or spoilboard.' },
-  { id: 'rect', label: 'Rect contour', blurb: 'Cut a rectangle, offset inside, outside or on the line.' },
+  { id: 'pocket', label: 'Rect pocket', blurb: 'Clear a rectangular pocket, ramping in, with a finishing pass at the wall.' },
+  { id: 'rect', label: 'Rect contour', blurb: 'Cut a rectangle, offset inside, outside or on the line, with holding tabs.' },
   { id: 'circle', label: 'Circle', blurb: 'Cut a circular contour, or clear a circular pocket.' },
+  { id: 'drill', label: 'Drill', blurb: 'Peck-drill a grid, a line, or a bolt circle of holes.' },
 ];
 
 export class MachiningPanel extends PanelElement {
@@ -52,6 +62,27 @@ export class MachiningPanel extends PanelElement {
   private diameter = 50;
   private pocket = false;
 
+  // Tabs (contours only)
+  private tabCount = 4;
+  private tabWidth = 6;
+  private tabHeight = 1.5;
+
+  // Rect pocket
+  private finishAllowance = 0.3;
+  private rampLength = 20;
+
+  // Drilling
+  private drillPatternId: DrillPattern = 'grid';
+  private countX = 3;
+  private countY = 3;
+  private spacingX = 30;
+  private spacingY = 30;
+  private holeCount = 6;
+  private boltDiameter = 80;
+  private startAngle = 0;
+  private retract = 2;
+  private dwellAtBottom = 0;
+
   override connectedCallback(): void {
     super.connectedCallback();
     this.bind(() => {
@@ -74,6 +105,10 @@ export class MachiningPanel extends PanelElement {
     };
   }
 
+  private get tabs() {
+    return { count: this.tabCount, width: this.tabWidth, height: this.tabHeight };
+  }
+
   private build(): GeneratedProgram {
     switch (this.op) {
       case 'facing':
@@ -83,12 +118,22 @@ export class MachiningPanel extends PanelElement {
           stepover: this.stepover,
           along: this.along,
         });
+      case 'pocket':
+        return rectPocket({
+          ...this.common(),
+          x0: this.x0, y0: this.y0, x1: this.x1, y1: this.y1,
+          stepover: this.stepover,
+          along: this.along,
+          finishAllowance: this.finishAllowance,
+          rampLength: this.rampLength,
+        });
       case 'rect':
         return rectContour({
           ...this.common(),
           x0: this.x0, y0: this.y0, x1: this.x1, y1: this.y1,
           side: this.side,
           climb: this.climb,
+          tabs: this.tabs,
         });
       case 'circle':
         return circle({
@@ -99,6 +144,21 @@ export class MachiningPanel extends PanelElement {
           climb: this.climb,
           pocket: this.pocket,
           stepover: this.stepover,
+          tabs: this.tabs,
+        });
+      case 'drill':
+        return drillPattern({
+          ...this.common(),
+          pattern: this.drillPatternId,
+          x0: this.x0, y0: this.y0,
+          countX: this.countX, countY: this.countY,
+          spacingX: this.spacingX, spacingY: this.spacingY,
+          x1: this.x1, y1: this.y1,
+          count: this.holeCount,
+          boltDiameter: this.boltDiameter,
+          startAngle: this.startAngle,
+          retract: this.retract,
+          dwellAtBottom: this.dwellAtBottom,
         });
     }
   }
@@ -136,6 +196,16 @@ export class MachiningPanel extends PanelElement {
       ${numberField('Y1', this.y1, (v) => ((this.y1 = v), this.requestUpdate()), { suffix: 'mm' })}
     `;
 
+    const tabsForm = html`
+      ${numberField('Tabs', this.tabCount, (v) => ((this.tabCount = Math.max(0, Math.round(v))), this.requestUpdate()), { suffix: 'off at 0', min: 0, step: 1, title: 'Bridges of material left so the part does not come loose on the last pass.' })}
+      ${this.tabCount > 0
+        ? html`
+            ${numberField('Tab width', this.tabWidth, (v) => ((this.tabWidth = v), this.requestUpdate()), { suffix: 'mm', title: 'Flat length of each tab along the path. The tool ramps in and out either side of it.' })}
+            ${numberField('Tab height', this.tabHeight, (v) => ((this.tabHeight = v), this.requestUpdate()), { suffix: 'mm', step: 0.1, title: 'Material left under the tool at the tab. Must be less than the cut depth.' })}
+          `
+        : nothing}
+    `;
+
     switch (this.op) {
       case 'facing':
         return html`
@@ -147,6 +217,18 @@ export class MachiningPanel extends PanelElement {
           ], (v) => ((this.along = v), this.requestUpdate()))}
           ${tool}
         `;
+      case 'pocket':
+        return html`
+          ${rect}
+          ${numberField('Stepover', this.stepover * 100, (v) => ((this.stepover = v / 100), this.requestUpdate()), { suffix: '%', min: 5, max: 100 })}
+          ${selectField('Raster along', this.along, [
+            { value: 'y', label: 'Y (long axis)' },
+            { value: 'x', label: 'X' },
+          ], (v) => ((this.along = v), this.requestUpdate()))}
+          ${numberField('Finish stock', this.finishAllowance, (v) => ((this.finishAllowance = v), this.requestUpdate()), { suffix: 'mm', step: 0.05, min: 0, title: 'Left on the wall by the roughing raster and removed by the wall loop at each level.' })}
+          ${numberField('Ramp', this.rampLength, (v) => ((this.rampLength = v), this.requestUpdate()), { suffix: 'mm', min: 0, title: 'Length of the descent into each level. 0 plunges straight down — only safe with a centre-cutting tool.' })}
+          ${tool}
+        `;
       case 'rect':
         return html`
           ${rect}
@@ -156,6 +238,7 @@ export class MachiningPanel extends PanelElement {
             { value: 'on', label: 'On the line' },
           ], (v) => ((this.side = v), this.requestUpdate()))}
           ${checkField('Climb milling', this.climb, (v) => ((this.climb = v), this.requestUpdate()))}
+          ${tabsForm}
           ${tool}
         `;
       case 'circle':
@@ -172,7 +255,47 @@ export class MachiningPanel extends PanelElement {
                 { value: 'on', label: 'On the line' },
               ], (v) => ((this.side = v), this.requestUpdate()))}
           ${checkField('Climb milling', this.climb, (v) => ((this.climb = v), this.requestUpdate()))}
+          ${this.pocket ? nothing : tabsForm}
           ${tool}
+        `;
+      case 'drill':
+        return html`
+          ${selectField('Pattern', this.drillPatternId, [
+            { value: 'grid', label: 'Grid' },
+            { value: 'line', label: 'Line' },
+            { value: 'bolt', label: 'Bolt circle' },
+          ], (v) => ((this.drillPatternId = v), this.requestUpdate()))}
+          ${numberField(this.drillPatternId === 'bolt' ? 'Centre X' : 'X0', this.x0, (v) => ((this.x0 = v), this.requestUpdate()), { suffix: 'mm' })}
+          ${numberField(this.drillPatternId === 'bolt' ? 'Centre Y' : 'Y0', this.y0, (v) => ((this.y0 = v), this.requestUpdate()), { suffix: 'mm' })}
+          ${this.drillPatternId === 'grid'
+            ? html`
+                ${numberField('Columns', this.countX, (v) => ((this.countX = v), this.requestUpdate()), { min: 1, step: 1 })}
+                ${numberField('Rows', this.countY, (v) => ((this.countY = v), this.requestUpdate()), { min: 1, step: 1 })}
+                ${numberField('Pitch X', this.spacingX, (v) => ((this.spacingX = v), this.requestUpdate()), { suffix: 'mm' })}
+                ${numberField('Pitch Y', this.spacingY, (v) => ((this.spacingY = v), this.requestUpdate()), { suffix: 'mm' })}
+              `
+            : nothing}
+          ${this.drillPatternId === 'line'
+            ? html`
+                ${numberField('X1', this.x1, (v) => ((this.x1 = v), this.requestUpdate()), { suffix: 'mm' })}
+                ${numberField('Y1', this.y1, (v) => ((this.y1 = v), this.requestUpdate()), { suffix: 'mm' })}
+                ${numberField('Holes', this.holeCount, (v) => ((this.holeCount = v), this.requestUpdate()), { min: 1, step: 1, title: 'Including both ends.' })}
+              `
+            : nothing}
+          ${this.drillPatternId === 'bolt'
+            ? html`
+                ${numberField('Circle ⌀', this.boltDiameter, (v) => ((this.boltDiameter = v), this.requestUpdate()), { suffix: 'mm' })}
+                ${numberField('Holes', this.holeCount, (v) => ((this.holeCount = v), this.requestUpdate()), { min: 1, step: 1 })}
+                ${numberField('First at', this.startAngle, (v) => ((this.startAngle = v), this.requestUpdate()), { suffix: '\u00b0', title: 'Angle of the first hole, measured anticlockwise from +X.' })}
+              `
+            : nothing}
+          ${numberField('Retract', this.retract, (v) => ((this.retract = v), this.requestUpdate()), { suffix: 'mm', title: 'Height each peck pulls back to. Must clear the stock top to actually clear the flutes.' })}
+          ${numberField('Dwell', this.dwellAtBottom, (v) => ((this.dwellAtBottom = v), this.requestUpdate()), { suffix: 's', min: 0, title: 'Pause at full depth on the last peck, for a clean hole bottom.' })}
+          ${tool}
+          <div class="param-note">
+            <strong>Per pass</strong> is the peck depth here, and <strong>Tool ⌀</strong> is the
+            drill diameter — the hole comes out at that size, since nothing is interpolated.
+          </div>
         `;
     }
   }
@@ -198,7 +321,7 @@ export class MachiningPanel extends PanelElement {
               `,
             )}
           </div>
-          ${this.op !== 'circle'
+          ${this.op === 'facing' || this.op === 'pocket' || this.op === 'rect'
             ? html`<button class="tiny" title="Fill the area from the machine's travel limits"
                 @click=${() => this.useWholeTable()}>Whole table</button>`
             : nothing}
