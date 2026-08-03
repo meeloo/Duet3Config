@@ -179,8 +179,8 @@ export class ResumePanel extends PanelElement {
     return html`
       <div class="resume">
         <div class="pack-blurb">
-          Turn on <strong>Pick</strong> in the Toolpath panel and click where the cut should
-          restart. Everything before that point is skipped.
+          Choose where the cut restarts from the Toolpath panel: drag the scrub bar, or turn
+          on <strong>Pick</strong> and click the path. Everything before that point is skipped.
         </div>
 
         ${offset === null

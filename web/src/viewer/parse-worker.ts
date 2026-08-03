@@ -29,6 +29,8 @@ self.onmessage = (e: MessageEvent<ParseRequest>) => {
       result.positions.buffer,
       result.offsets.buffer,
       result.kinds.buffer,
+      result.times.buffer,
+      result.rapidMm.buffer,
     ]);
   } catch (err) {
     post({ type: 'error', message: (err as Error).message });

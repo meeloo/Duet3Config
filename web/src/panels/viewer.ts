@@ -20,6 +20,14 @@ import { ToolpathRenderer, type Box, type Projection, type ViewName } from '../v
 import type { FileEntry } from '../machine/types.js';
 import { theme, viewerPalette } from '../core/theme.js';
 import { loadedProgram, previewProgram, resumePoint } from '../ui/program.js';
+import {
+  cursorAtOffset,
+  cursorAtTime,
+  programCursor,
+  totalSeconds,
+  type ProgramCursor,
+} from '../viewer/cursor.js';
+import { formatDuration } from '../core/util.js';
 
 const cache = new Map<string, ParsedToolpath>();
 /** Refuse to pull anything past this over the controller's HTTP server. */
@@ -47,6 +55,19 @@ export class ViewerPanel extends PanelElement {
   /** When on, clicking the toolpath chooses a run-from-line point. */
   private pickMode = false;
 
+  // --- Simulation ---------------------------------------------------------
+  /** Playback multiplier; 0 means paused. */
+  private playRate = 0;
+  private playHandle: number | null = null;
+  private lastFrameMs = 0;
+  /**
+   * True while the operator is driving the cursor by hand — scrubbing or
+   * picking. A running job pushes the cursor too, and without this the two
+   * would fight every poll: you would drag the slider and it would snap back
+   * 250ms later.
+   */
+  private manualCursor = false;
+
   override connectedCallback(): void {
     super.connectedCallback();
     this.bind(() => {
@@ -65,7 +86,10 @@ export class ViewerPanel extends PanelElement {
       const p = previewProgram.get();
       if (p) void this.showGenerated(p.name, p.gcode);
     });
-    this.onDispose(() => this.teardown());
+    this.onDispose(() => {
+      this.stopPlaying();
+      this.teardown();
+    });
   }
 
   protected override firstUpdated(): void {
@@ -131,6 +155,12 @@ export class ViewerPanel extends PanelElement {
         if (hit) {
           resumePoint.set(hit);
           this.renderer.resumeMarker = hit.point;
+          // Picking is a cursor move as much as a run-from-line choice, so the
+          // slider and the simulation follow the click rather than sitting
+          // somewhere else showing a different moment in the same program.
+          this.stopPlaying();
+          this.manualCursor = true;
+          this.setCursor(cursorAtOffset(this.path, hit.offset, this.rapidRate, 'pick'));
         }
         return;
       }
@@ -187,6 +217,7 @@ export class ViewerPanel extends PanelElement {
 
   private clearResumePoint(): void {
     resumePoint.set(null);
+    this.followLive();
     if (this.renderer) this.renderer.resumeMarker = null;
   }
 
@@ -227,15 +258,25 @@ export class ViewerPanel extends PanelElement {
     const state = machine.peek();
     r.showRapids = this.showRapids;
 
-    // Map the job's byte offset onto the toolpath's source offsets.
+    // Map the job's byte offset onto the toolpath's source offsets — unless the
+    // operator has taken the cursor by scrubbing or picking, in which case the
+    // job would drag it back on the next poll.
     const job = state.job;
-    r.progress =
-      this.followJob && job?.filePosition != null && this.loadedFrom === job.fileName
-        ? job.filePosition
-        : -1;
+    const live =
+      this.followJob && job?.filePosition != null && this.loadedFrom === job.fileName;
+    if (live && !this.manualCursor && this.path) {
+      const cursor = cursorAtOffset(this.path, job!.filePosition!, this.rapidRate, 'job');
+      programCursor.set(cursor);
+      r.progress = job!.filePosition!;
+    } else if (!this.manualCursor && !live) {
+      programCursor.set(null);
+      r.progress = -1;
+    } else {
+      r.progress = programCursor.peek()?.offset ?? -1;
+    }
 
     const visible = state.axes.filter((a) => ['X', 'Y', 'Z'].includes(a.letter));
-    const cutter: [number, number, number] | null =
+    const machineCutter: [number, number, number] | null =
       visible.length >= 3
         ? [
             visible.find((a) => a.letter === 'X')!.work,
@@ -243,6 +284,11 @@ export class ViewerPanel extends PanelElement {
             visible.find((a) => a.letter === 'Z')!.work,
           ]
         : null;
+    // While scrubbing, the crosshair belongs on the simulated point rather than
+    // on the real spindle — the whole purpose is to look somewhere the machine
+    // isn't.
+    const scrubbed = this.manualCursor ? programCursor.peek()?.point ?? null : null;
+    const cutter = scrubbed ?? machineCutter;
 
     r.setOverlay(
       cutter,
@@ -250,6 +296,114 @@ export class ViewerPanel extends PanelElement {
       this.showEnvelope ? this.machineEnvelope() : null,
     );
     r.render();
+  }
+
+  // --- Program cursor -----------------------------------------------------
+
+  /**
+   * How fast this machine rapids, mm/min.
+   *
+   * The parser leaves rapids untimed on purpose, so the estimate is only as
+   * good as this. The slowest of X/Y/Z is the honest answer for a three-axis
+   * rapid; with nothing connected, a figure that at least keeps the slider
+   * usable rather than making every rapid instantaneous.
+   */
+  private get rapidRate(): number {
+    const axes = machine
+      .peek()
+      .axes.filter((a) => ['X', 'Y', 'Z'].includes(a.letter) && a.maxFeed > 0);
+    return axes.length ? Math.min(...axes.map((a) => a.maxFeed)) : 3000;
+  }
+
+  private get duration(): number {
+    return this.path ? totalSeconds(this.path, this.rapidRate) : 0;
+  }
+
+  private setCursor(cursor: ProgramCursor | null): void {
+    programCursor.set(cursor);
+    if (this.renderer) this.renderer.progress = cursor ? cursor.offset : -1;
+    this.requestUpdate();
+  }
+
+  /** Scrub to a time. Stops following the job — you asked to look elsewhere. */
+  private scrubTo(seconds: number): void {
+    if (!this.path) return;
+    this.manualCursor = true;
+    this.setCursor(cursorAtTime(this.path, seconds, this.rapidRate, 'scrub'));
+  }
+
+  /**
+   * Commit the scrub as a run-from-line point.
+   *
+   * Split from scrubTo because the two events mean different things: `input`
+   * fires continuously while dragging and only previews, `change` fires on
+   * release and is a decision. Updating the resume point on every `input` frame
+   * would make the run-from-line panel recompute modal state — a walk of the
+   * whole file — sixty times a second, and smear the marker across the path
+   * while doing it. Playback never commits at all: watching a simulation is not
+   * choosing where to restart.
+   */
+  private commitScrub(): void {
+    const cursor = programCursor.peek();
+    if (!cursor || !this.renderer) return;
+    resumePoint.set({ offset: cursor.offset, point: cursor.point });
+    this.renderer.resumeMarker = cursor.point;
+    this.requestUpdate();
+  }
+
+  private setPlayRate(rate: number): void {
+    this.playRate = rate;
+    if (rate > 0) {
+      this.manualCursor = true;
+      // Start from the beginning if the cursor is parked at the end, so the
+      // play button never looks broken.
+      if (!programCursor.peek() || programCursor.peek()!.seconds >= this.duration - 1e-3) {
+        this.scrubTo(0);
+      }
+      this.lastFrameMs = performance.now();
+      if (this.playHandle === null) this.playHandle = requestAnimationFrame(this.step);
+    } else {
+      this.stopPlaying();
+    }
+    this.requestUpdate();
+  }
+
+  private stopPlaying(): void {
+    this.playRate = 0;
+    if (this.playHandle !== null) cancelAnimationFrame(this.playHandle);
+    this.playHandle = null;
+  }
+
+  /**
+   * Advance by wall-clock time, not by a fixed step per frame.
+   *
+   * A frame-counted simulation runs at whatever rate the browser feels like,
+   * so it plays at a different speed on a laptop that is throttling — and "4×"
+   * would mean nothing.
+   */
+  private step = (now: number): void => {
+    this.playHandle = null;
+    if (this.playRate <= 0 || !this.path) return;
+
+    const dt = Math.min((now - this.lastFrameMs) / 1000, 0.25);
+    this.lastFrameMs = now;
+    const next = (programCursor.peek()?.seconds ?? 0) + dt * this.playRate;
+
+    if (next >= this.duration) {
+      this.setCursor(cursorAtTime(this.path, this.duration, this.rapidRate, 'scrub'));
+      this.stopPlaying();
+      this.requestUpdate();
+      return;
+    }
+    this.setCursor(cursorAtTime(this.path, next, this.rapidRate, 'scrub'));
+    this.playHandle = requestAnimationFrame(this.step);
+  };
+
+  /** Hand the cursor back to the running job. */
+  private followLive(): void {
+    this.stopPlaying();
+    this.manualCursor = false;
+    this.requestUpdate();
   }
 
   /**
@@ -388,6 +542,75 @@ export class ViewerPanel extends PanelElement {
     });
   }
 
+  /**
+   * Scrub bar, play controls and the readout.
+   *
+   * Deliberately one row and always visible when a program is loaded: this is
+   * the control that answers "what does this file actually do", and burying it
+   * behind a toggle means it never gets used.
+   */
+  private renderTransport(): TemplateResult | typeof nothing {
+    if (!this.path) return nothing;
+    const total = this.duration;
+    const cursor = programCursor.get();
+    const at = cursor?.seconds ?? 0;
+    const playing = this.playRate > 0;
+
+    return html`
+      <div class="viewer-transport">
+        <button
+          class="seg play"
+          title=${playing ? 'Pause' : 'Play the toolpath'}
+          @click=${() => this.setPlayRate(playing ? 0 : 1)}
+        >
+          ${playing ? '❚❚' : '▶'}
+        </button>
+        <input
+          class="transport-slider"
+          type="range"
+          min="0"
+          max=${Math.max(total, 0.001)}
+          step="0.001"
+          .value=${String(at)}
+          @input=${(e: Event) => this.scrubTo(Number((e.target as HTMLInputElement).value))}
+          @change=${() => this.commitScrub()}
+        />
+        <span class="transport-time">
+          <strong>${formatDuration(at)}</strong>/${formatDuration(total)}
+        </span>
+        <div class="segmented transport-rates">
+          ${[1, 4, 16, 64].map(
+            (r) => html`
+              <button
+                class=${playing && this.playRate === r ? 'seg active' : 'seg'}
+                title="Play at ${r}x"
+                @click=${() => this.setPlayRate(r)}
+              >
+                ${r}×
+              </button>
+            `,
+          )}
+        </div>
+        ${cursor
+          ? html`<span class="transport-where" title="Source byte offset ${cursor.offset}">
+              X${cursor.point[0].toFixed(1)} Y${cursor.point[1].toFixed(1)}
+              Z${cursor.point[2].toFixed(1)}
+              <em>${cursor.source === 'job' ? 'live' : cursor.source}</em>
+            </span>`
+          : nothing}
+        ${this.manualCursor
+          ? html`<button
+              class="tiny"
+              title="Stop scrubbing and follow the running job again"
+              @click=${() => this.followLive()}
+            >
+              Follow job
+            </button>`
+          : nothing}
+      </div>
+    `;
+  }
+
   protected override render(): TemplateResult {
     const caps = capabilities.get();
     const state = machine.get();
@@ -492,6 +715,8 @@ export class ViewerPanel extends PanelElement {
         ${this.path?.warnings.length
           ? html`<div class="viewer-warn">${this.path.warnings.slice(0, 3).join(' · ')}</div>`
           : nothing}
+
+        ${this.renderTransport()}
 
         <div class="viewer-canvas-wrap">
           <canvas></canvas>

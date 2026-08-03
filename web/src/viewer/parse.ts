@@ -15,6 +15,19 @@ export interface ParsedToolpath {
   positions: Float32Array;
   /** Source byte offset per vertex. */
   offsets: Float32Array;
+  /**
+   * Cumulative CUTTING seconds at each vertex, from each segment's length and
+   * its modal feed.
+   *
+   * Rapids contribute nothing here, and are accumulated separately in
+   * `rapidMm`. How fast a rapid actually runs is a property of the machine, not
+   * the file, and baking a guess into the parser would make its output depend
+   * on which machine happened to be connected. The caller adds
+   * `rapidMm[i] / rapidRate` to get a wall-clock estimate.
+   */
+  times: Float32Array;
+  /** Cumulative rapid distance in mm at each vertex. See `times`. */
+  rapidMm: Float32Array;
   /** 0 = rapid, 1 = cutting. Per vertex. */
   kinds: Uint8Array;
   min: [number, number, number];
@@ -53,6 +66,8 @@ export function parseGcode(
   const positions: number[] = [];
   const offsets: number[] = [];
   const kinds: number[] = [];
+  const times: number[] = [];
+  const rapidMm: number[] = [];
   const tools: number[] = [];
   const warnings: string[] = [];
 
@@ -97,6 +112,13 @@ export function parseGcode(
     // feed; rapids only contribute distance, because how fast a rapid actually
     // runs is a property of the machine, not the file.
     const len = Math.hypot(toX - fromX, toY - fromY, toZ - fromZ);
+
+    // The running totals BEFORE this segment belong to its first vertex, and
+    // the totals after it to its second — so a scrub between the two can be
+    // interpolated along the segment rather than snapping to its ends.
+    times.push(cutSeconds);
+    rapidMm.push(rapidLength);
+
     if (cutting) {
       if (feed > 0) cutSeconds += (len / feed) * 60;
     } else {
@@ -108,6 +130,9 @@ export function parseGcode(
       const horizontal = Math.hypot(toX - fromX, toY - fromY) > 1e-6;
       if (horizontal) minRapidZ = Math.min(minRapidZ, fromZ, toZ);
     }
+
+    times.push(cutSeconds);
+    rapidMm.push(rapidLength);
     track(fromX, fromY, fromZ);
     track(toX, toY, toZ);
   };
@@ -235,6 +260,8 @@ export function parseGcode(
     warnings,
     maxFeed,
     spindleSpeeds,
+    times: new Float32Array(times),
+    rapidMm: new Float32Array(rapidMm),
     cutSeconds,
     rapidLength,
     minRapidZ: isFinite(minRapidZ) ? minRapidZ : 0,
