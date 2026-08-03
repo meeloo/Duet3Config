@@ -87,7 +87,10 @@ html, body {
   overflow: hidden;
 }
 
-#app { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+/* 100vh first: dvh is Safari 15.4, and an unknown unit drops the declaration
+   entirely — leaving #app with no height, the dock with nothing to fill, and a
+   blank page. The fallback has to come first so newer engines override it. */
+#app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
 cnc-dashboard { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
 button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
@@ -251,7 +254,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 
 /* Dockview host. One surface per page; only the active one is displayed. */
 .dv-container { flex: 1; min-height: 0; position: relative; overflow: hidden; }
-.dv-host { position: absolute; inset: 0; }
+.dv-host { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
 .dv-panel { height: 100%; width: 100%; overflow: hidden; display: flex; }
 .dv-panel > * { flex: 1; min-width: 0; min-height: 0; overflow: auto; }
 
@@ -579,7 +582,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .progress { position: relative; height: 20px; background: var(--bg-input);
   border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
 .progress-bar { height: 100%; background: var(--accent); transition: width 200ms linear; }
-.progress-label { position: absolute; inset: 0; display: grid; place-items: center;
+.progress-label { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: grid; place-items: center;
   font-size: 11px; font-weight: 700; mix-blend-mode: difference; }
 
 /* ---------- Console ---------- */
@@ -686,7 +689,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 
 .viewer-canvas-wrap { flex: 1; position: relative; min-height: 0; }
 .viewer-canvas-wrap canvas { width: 100%; height: 100%; display: block; touch-action: none; }
-.viewer-overlay { position: absolute; inset: 0; display: grid; place-items: center;
+.viewer-overlay { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: grid; place-items: center;
   color: var(--text-faint); font-size: 13px; pointer-events: none; }
 .viewer-error { padding: 6px 10px; color: var(--bad-text); font-size: 12px; }
 .viewer-warn { padding: 6px 10px; color: var(--warn); font-size: 11px; }
@@ -699,7 +702,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 /* ---------- Modal ---------- */
 
 .modal-backdrop {
-  position: fixed; inset: 0; background: color-mix(in srgb, var(--bg) 30%, transparent);
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: color-mix(in srgb, var(--bg) 30%, transparent);
   display: grid; place-items: center; z-index: 100; padding: 20px;
 }
 .modal {
@@ -837,7 +840,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 /* The file input itself is hidden; the label is the button. */
 .library-import { position: relative; display: flex; align-items: center; gap: 10px;
   cursor: pointer; padding-top: 12px; border-top: 1px solid var(--border); }
-.library-import input[type="file"] { position: absolute; inset: 0; opacity: 0;
+.library-import input[type="file"] { position: absolute; top: 0; right: 0; bottom: 0; left: 0; opacity: 0;
   width: 100%; cursor: pointer; }
 .library-import span { padding: 8px 14px; border: 1px solid var(--border-strong);
   border-radius: var(--radius); background: var(--bg-raised); white-space: nowrap; }
@@ -977,7 +980,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .cam-view { position: relative; flex: 1; min-height: 140px; background: #000;
   border-radius: var(--radius); overflow: hidden; display: grid; place-items: center; }
 .cam-view.idle { background: var(--bg-raised); }
-.cam-frame { position: absolute; inset: 0; width: 100%; height: 100%;
+.cam-frame { position: absolute; top: 0; right: 0; bottom: 0; left: 0; width: 100%; height: 100%;
   object-fit: contain; opacity: 0; }
 .cam-frame.showing { opacity: 1; }
 

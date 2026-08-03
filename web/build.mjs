@@ -134,7 +134,11 @@ const options = {
   absWorkingDir: root,
   bundle: true,
   format: 'esm',
-  target: ['es2022'],
+  // Safari 12 is the floor because an iPad mini 2 cannot go past iOS 12, and a
+  // superseded tablet propped next to the machine is a good use for it. Nothing
+  // subtle happens when the target is too high: the bundle uses syntax the
+  // engine cannot parse, the module is rejected whole, and the page is blank.
+  target: ['es2019', 'safari12'],
   sourcemap: prod ? false : 'inline',
   minify: prod,
   legalComments: 'none',

@@ -1,5 +1,11 @@
 // Entry point.
 
+// First import, deliberately: an old Safari is missing APIs that dockview
+// constructs unguarded, and the failure is a blank page. Imports are evaluated
+// in order, so this module's side effect lands before any other module runs —
+// a call placed here instead would not, because imports are hoisted above it.
+import './core/compat.js';
+
 import './panels/index.js';
 import './ui/topbar.js';
 import './ui/messagebox.js';
