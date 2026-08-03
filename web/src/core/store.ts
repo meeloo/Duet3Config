@@ -44,12 +44,27 @@ export function appendLog(line: LogLine): void {
   log.touch();
 }
 
+/**
+ * Which connection attempt is the current one.
+ *
+ * A cancelled attempt cannot be un-awaited — the promise is still out there and
+ * will eventually settle. Without this it settles into a driver that has been
+ * thrown away: a late success would set `connected` while `driver` is null, and
+ * a late failure would report an error for something nobody is waiting on. Every
+ * continuation therefore checks that it is still the attempt in progress.
+ */
+let connectEpoch = 0;
+let connectAbort: AbortController | null = null;
+
 export async function connect(url: string, id: string, password = ''): Promise<void> {
   await disconnect();
 
   const info = driverInfo(id);
   if (!info) throw new Error(`unknown driver: ${id}`);
 
+  const epoch = ++connectEpoch;
+  connectAbort = new AbortController();
+  const signal = connectAbort.signal;
   connecting.set(true);
   connectionError.set(null);
   saveSetting('driverId', id);
@@ -70,18 +85,45 @@ export async function connect(url: string, id: string, password = ''): Promise<v
   unsubLog = d.onLog(appendLog);
 
   try {
-    await d.connect({ url, password });
+    await d.connect({ url, password, signal });
+    if (epoch !== connectEpoch) return;
     connected.set(true);
     appendLog({ level: 'info', text: `Connected to ${url}`, time: new Date() });
   } catch (err) {
+    // Cancelled, or superseded by a later attempt. Neither is a failure, and
+    // whoever ended it has already said so.
+    if (epoch !== connectEpoch) return;
     const message = (err as Error).message;
     connectionError.set(message);
     appendLog({ level: 'error', text: `Connection failed: ${message}`, time: new Date() });
     await disconnect();
     throw err;
   } finally {
-    connecting.set(false);
+    if (epoch === connectEpoch) connecting.set(false);
   }
+}
+
+/**
+ * Give up on a connection attempt that is going nowhere.
+ *
+ * The case this exists for is not a controller that refuses — that fails fast
+ * and says so. It is one that accepts the connection and then says nothing,
+ * which leaves the app claiming to be connecting with no error, no progress and
+ * no way out. Requests now time out on their own, but 15 seconds of staring at
+ * "Connecting…" is still 15 seconds of not knowing, so there is a button.
+ */
+export function cancelConnect(): void {
+  if (!connecting.peek()) return;
+  // Orphan the attempt first, so its continuations know to stay quiet.
+  connectEpoch++;
+  connectAbort?.abort();
+  connectAbort = null;
+  batch(() => {
+    connecting.set(false);
+    connectionError.set('Connection cancelled.');
+  });
+  appendLog({ level: 'warning', text: 'Connection attempt cancelled', time: new Date() });
+  void disconnect();
 }
 
 export async function disconnect(): Promise<void> {

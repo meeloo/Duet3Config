@@ -24,6 +24,15 @@ export interface ConnectionConfig {
   /** Base URL or host of the controller, e.g. "http://sebscnc.local". */
   url: string;
   password?: string;
+  /**
+   * Aborted when the operator gives up waiting.
+   *
+   * A driver must plumb this all the way down to whatever it is blocked on.
+   * Cancelling that only stops the caller waiting — the socket stays open, the
+   * request stays outstanding, and a controller that answers a minute later
+   * still gets to resolve a connection nobody wants any more.
+   */
+  signal?: AbortSignal;
 }
 
 export interface JogOptions {

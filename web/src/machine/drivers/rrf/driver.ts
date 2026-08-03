@@ -93,6 +93,7 @@ export class RrfDriver implements MachineDriver {
     this.config = config;
     this.stopped = false;
     this.client = new RrfClient(config.url);
+    this.client.signal = config.signal ?? null;
 
     this.patchState({ status: 'connecting' });
     const info = await this.client.connect(config.password ?? '');

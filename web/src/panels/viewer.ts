@@ -31,6 +31,16 @@ import { formatDuration } from '../core/util.js';
 import { toolShape, type ToolShape } from '../tools/shape.js';
 import { getTool, loadTools } from '../tools/table.js';
 
+/**
+ * Zoom per wheel event, as a fraction of the current distance.
+ *
+ * Deliberately per *event* rather than scaled by deltaY, so one mouse-wheel
+ * notch is one predictable step. The cost is that a trackpad, which fires a
+ * stream of small events for a single two-finger gesture, gets a full step from
+ * each one — which is why this is a third of what feels right for a mouse.
+ */
+const ZOOM_STEP = 0.04;
+
 const cache = new Map<string, ParsedToolpath>();
 /** Refuse to pull anything past this over the controller's HTTP server. */
 const MAX_FETCH_BYTES = 64 * 1024 * 1024;
@@ -220,7 +230,10 @@ export class ViewerPanel extends PanelElement {
         if (!this.renderer) return;
         e.preventDefault();
         const cam = this.renderer.camera;
-        cam.distance = Math.max(1, Math.min(100000, cam.distance * (1 + Math.sign(e.deltaY) * 0.12)));
+        cam.distance = Math.max(
+          1,
+          Math.min(100000, cam.distance * (1 + Math.sign(e.deltaY) * ZOOM_STEP)),
+        );
       },
       { passive: false },
     );

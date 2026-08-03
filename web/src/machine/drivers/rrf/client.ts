@@ -22,6 +22,28 @@ export class RrfError extends Error {
 /** Thrown when the session is gone and the caller should reconnect. */
 export class SessionLostError extends RrfError {}
 
+/** Thrown when the caller aborted the request. Not a failure to report. */
+export class CancelledError extends RrfError {
+  constructor(message = 'cancelled') {
+    super(message);
+    this.name = 'CancelledError';
+  }
+}
+
+/**
+ * How long one request may go unanswered before it is treated as dead.
+ *
+ * A board on the LAN answers rr_model in single-digit milliseconds, so this is
+ * not a latency budget — it is the line between "slow" and "never". It has to
+ * exist because a TCP connection that is accepted and then ignored leaves fetch
+ * pending indefinitely, with no error, forever: the app looks like it is still
+ * connecting and there is nothing to report and nothing to retry.
+ */
+const REQUEST_TIMEOUT_MS = 15_000;
+
+/** Long enough for a real file over wifi; short enough to not hang forever. */
+const UPLOAD_TIMEOUT_MS = 120_000;
+
 export interface ConnectResult {
   sessionTimeout: number;
   boardType: string;
@@ -57,6 +79,14 @@ export class RrfClient {
    */
   private readonly sameOrigin: boolean;
 
+  /**
+   * Aborts everything this client has in flight.
+   *
+   * Owned by whoever is driving the connection, so that cancelling reaches the
+   * requests rather than only the code waiting on them.
+   */
+  signal: AbortSignal | null = null;
+
   constructor(url: string) {
     this.base = normaliseBase(url);
     this.sameOrigin = isSameOrigin(this.base);
@@ -87,7 +117,23 @@ export class RrfClient {
     endpoint: string,
     params: Record<string, string | number | undefined> = {},
     init: RequestInit = {},
+    timeoutMs: number = REQUEST_TIMEOUT_MS,
   ): Promise<Response> {
+    const attempt = new AbortController();
+    const timer =
+      timeoutMs > 0
+        ? setTimeout(() => attempt.abort(new DOMException('timed out', 'TimeoutError')), timeoutMs)
+        : null;
+    // The caller's signal is how a cancel button reaches a request that is
+    // already in flight; without linking it, cancelling only stops waiting for
+    // the answer, it does not stop asking.
+    const outer = this.signal;
+    const relay = () => attempt.abort(outer?.reason);
+    if (outer) {
+      if (outer.aborted) relay();
+      else outer.addEventListener('abort', relay);
+    }
+
     let res: Response;
     try {
       res = await fetch(this.url(endpoint, params), {
@@ -96,8 +142,20 @@ export class RrfClient {
         // The board is on the LAN; never let a stale cache answer for machine state.
         cache: 'no-store',
         credentials: 'omit',
+        signal: attempt.signal,
       });
     } catch (e) {
+      if (outer?.aborted) throw new CancelledError(`${endpoint} cancelled`);
+      if (attempt.signal.aborted) {
+        // The distinction matters: a refused connection is a wrong address or a
+        // board that is off, whereas silence is a board that is listening and
+        // not answering — wedged, or out of HTTP session slots.
+        throw new RrfError(
+          `${endpoint} did not answer within ${Math.round(timeoutMs / 1000)}s. ` +
+            `The controller accepted the connection but sent nothing back — it may be busy, ` +
+            `out of session slots (try M552 or a power cycle), or reachable but not responding.`,
+        );
+      }
       // A fetch that dies below HTTP level gives no detail ("Load failed" in
       // Safari, "Failed to fetch" in Chrome). Don't assert a cause we can't
       // observe — name the candidates, in the order they're actually likely.
@@ -110,6 +168,13 @@ export class RrfClient {
           `controller, not CORS.` +
           (this.sameOrigin ? '' : ` If it loads fine there, check M586 C"*" in config-network.g.`),
       );
+    } finally {
+      // Cleared once the headers are in. The timeout deliberately covers
+      // time-to-first-byte and not the body: a small JSON answer follows its
+      // headers immediately, while a file download legitimately takes as long
+      // as it takes, and killing that at 15s would be a bug of its own.
+      if (timer) clearTimeout(timer);
+      outer?.removeEventListener('abort', relay);
     }
 
     // RRF answers 401 when the session has expired or was evicted.
@@ -316,6 +381,10 @@ export class RrfClient {
         // application/json and the firmware is perfectly happy.
         body: new Blob([data as unknown as BlobPart]),
       },
+      // RRF answers only once the whole body has landed on the SD card, so an
+      // upload's time-to-first-byte is the upload. The usual budget would kill
+      // any file worth uploading.
+      UPLOAD_TIMEOUT_MS,
     );
     const body = (await res.json()) as { err: number };
     if (body.err !== 0) {

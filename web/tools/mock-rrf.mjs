@@ -398,6 +398,10 @@ function sendJson(res, obj) {
   res.end(JSON.stringify(obj));
 }
 
+/** Endpoint to answer with silence, for testing the connect timeout / cancel. */
+const HANG = process.env.MOCK_HANG ?? '';
+const hung = [];
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const path = url.pathname;
@@ -407,6 +411,16 @@ const server = createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(405);
     return res.end();
+  }
+
+  // The worst failure a controller has: it accepts the connection and then says
+  // nothing at all. Not an error, not a refusal, not a close — silence. A client
+  // that trusts fetch to eventually settle waits forever, which is exactly the
+  // limbo this reproduces. MOCK_HANG names the endpoint to go quiet on
+  // ("rr_connect", "rr_model", "all").
+  if (HANG && (HANG === 'all' || path === `/${HANG}`)) {
+    hung.push(res); // held so the socket stays open rather than being GC'd
+    return; // deliberately no response, ever
   }
 
   switch (path) {

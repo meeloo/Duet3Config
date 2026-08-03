@@ -8,6 +8,7 @@ import { PanelElement } from './panel.js';
 import {
   actions,
   appendLog,
+  cancelConnect,
   connect,
   connected,
   connecting,
@@ -300,13 +301,17 @@ export class TopBar extends PanelElement {
             : nothing}
           <span class="identity">${state.identity ?? (info?.label ?? '')}</span>
           ${!live
-            ? html`<button
-                class="tiny"
-                ?disabled=${busy}
-                @click=${() => void this.toggleConnection()}
-              >
-                ${busy ? 'Connecting…' : 'Connect'}
-              </button>`
+            ? busy
+              ? html`<button
+                  class="tiny danger"
+                  title="Stop waiting for the controller"
+                  @click=${() => cancelConnect()}
+                >
+                  Cancel
+                </button>`
+              : html`<button class="tiny" @click=${() => void this.toggleConnection()}>
+                  Connect
+                </button>`
             : nothing}
         </div>
 
@@ -359,9 +364,14 @@ export class TopBar extends PanelElement {
               @change=${(e: Event) => (this.password = (e.target as HTMLInputElement).value)}
             />
           </label>
-          <button ?disabled=${busy} @click=${() => void this.toggleConnection()}>
-            ${busy ? 'Connecting…' : live ? 'Disconnect' : 'Connect'}
-          </button>
+          ${busy
+            ? html`<button class="danger" title="Stop waiting for the controller"
+                @click=${() => cancelConnect()}>
+                Cancel
+              </button>`
+            : html`<button @click=${() => void this.toggleConnection()}>
+                ${live ? 'Disconnect' : 'Connect'}
+              </button>`}
           <button class="tiny" title="Switch between light and dark" @click=${() => toggleTheme()}>
             ${theme.get() === 'dark' ? '☀ Light' : '☾ Dark'}
           </button>
