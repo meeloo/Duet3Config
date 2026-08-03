@@ -27,6 +27,7 @@ import { joinPath } from './util.js';
 export const SYNCED_KEYS = [
   'dockLayout',
   'jog',
+  'macros',
   'probeMap',
   'wcsNames',
   'toolTable',
@@ -112,6 +113,8 @@ export function describeKey(key: string): string {
       return 'panel layout and pages';
     case 'jog':
       return 'jog rings, reach and speed';
+    case 'macros':
+      return 'macro confirmation';
     case 'probeMap':
       return 'probe role assignments';
     case 'wcsNames':

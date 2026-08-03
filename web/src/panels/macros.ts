@@ -12,7 +12,15 @@
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { PanelElement, registerPanel } from '../ui/panel.js';
-import { actions, activeDriver, capabilities, connected, machine } from '../core/store.js';
+import {
+  actions,
+  activeDriver,
+  capabilities,
+  connected,
+  loadSetting,
+  machine,
+  saveSetting,
+} from '../core/store.js';
 import { BUSY_STATES, type FileEntry } from '../machine/types.js';
 import { empty } from '../ui/widgets.js';
 
@@ -25,6 +33,21 @@ interface MacroGroup {
 
 /** How deep to walk. Deep enough for any sane layout, bounded against a loop. */
 const MAX_DEPTH = 4;
+
+interface MacroSettings {
+  /**
+   * Ask before running.
+   *
+   * Off by default, because a macro panel whose whole purpose is one press is
+   * not improved by making it two. But several macros on a machine like this
+   * move the spindle the moment they start — the ATC helpers, anything that
+   * drives to the tool setter — and a mis-tap on a tablet propped next to the
+   * work is a real way to break a cutter.
+   */
+  confirm: boolean;
+}
+
+const DEFAULT_SETTINGS: MacroSettings = { confirm: false };
 
 /**
  * Natural-order compare, so "Tool 10" sorts after "Tool 9" rather than after
@@ -40,6 +63,10 @@ export class MacrosPanel extends PanelElement {
   /** Path of the macro most recently fired, for a moment's feedback. */
   private lastRun: string | null = null;
   private loadedFor: string | null = null;
+  private settings: MacroSettings = {
+    ...DEFAULT_SETTINGS,
+    ...loadSetting<Partial<MacroSettings>>('macros', {}),
+  };
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -123,7 +150,19 @@ export class MacrosPanel extends PanelElement {
 
   // --- Running ------------------------------------------------------------
 
+  private setConfirm(on: boolean): void {
+    this.settings = { ...this.settings, confirm: on };
+    saveSetting('macros', this.settings);
+    this.requestUpdate();
+  }
+
   private async run(macro: FileEntry): Promise<void> {
+    if (
+      this.settings.confirm &&
+      !confirm(`Run ${MacrosPanel.title(macro.name)}?\n\n${macro.path}`)
+    ) {
+      return;
+    }
     this.lastRun = macro.path;
     this.requestUpdate();
     await actions.runMacro(macro.path);
@@ -182,6 +221,14 @@ export class MacrosPanel extends PanelElement {
       <div class="macros">
         <div class="macro-bar">
           <span class="hint">${count} macro${count === 1 ? '' : 's'} in ${caps.macroRoot}</span>
+          <label class="macro-confirm" title="Ask before running. Off means one press runs it.">
+            <input
+              type="checkbox"
+              .checked=${this.settings.confirm}
+              @change=${(e: Event) => this.setConfirm((e.target as HTMLInputElement).checked)}
+            />
+            <span>Confirm</span>
+          </label>
           <button class="tiny" ?disabled=${this.loading} @click=${() => void this.load()}>
             ${this.loading ? 'Reading…' : 'Refresh'}
           </button>
