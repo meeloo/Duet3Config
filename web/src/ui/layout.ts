@@ -95,7 +95,7 @@ export function renamePage(index: number, name: string): void {
 }
 
 const DEFAULT_PAGES: PageSpec[] = [
-  { id: 'control', name: 'Control', panels: ['dro', 'jog', 'spindle'], stacked: { job: 'spindle', console: 'spindle' } },
+  { id: 'control', name: 'Control', panels: ['dro', 'jog', 'spindle'], stacked: { job: 'spindle', macros: 'spindle', console: 'spindle' } },
   {
     id: 'job',
     name: 'Job',

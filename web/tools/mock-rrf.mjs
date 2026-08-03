@@ -107,9 +107,30 @@ const FILES = {
     { type: 'f', name: 'Engage Dust Shoe.g', size: 120, date: '2026-07-01T10:00:00' },
     { type: 'f', name: 'ProbeZ.g', size: 260, date: '2026-07-01T10:00:00' },
     { type: 'f', name: 'Save Work State.g', size: 210, date: '2026-07-01T10:00:00' },
+    { type: 'd', name: 'MinMax', size: 0, date: '2026-06-01T09:00:00' },
+    { type: 'f', name: 'Go To Z Probe.g', size: 140, date: '2026-07-01T10:00:00' },
+    { type: 'f', name: 'Retract Dust Shoe.g', size: 120, date: '2026-07-01T10:00:00' },
+    { type: 'f', name: 'Tool 9.g', size: 80, date: '2026-07-01T10:00:00' },
+    { type: 'f', name: 'Tool 10.g', size: 80, date: '2026-07-01T10:00:00' },
   ],
   '/macros/Setup': [
     { type: 'f', name: 'Plane Stock.g', size: 800, date: '2026-06-01T09:00:00' },
+    { type: 'f', name: 'flattenSpoilboard.g', size: 640, date: '2026-06-01T09:00:00' },
+  ],
+  // Mirrors the real machine: a folder of corner-travel helpers, plus one level
+  // deeper so the walk is actually exercised rather than assumed.
+  '/macros/MinMax': [
+    { type: 'd', name: 'Diagonals', size: 0, date: '2026-06-01T09:00:00' },
+    { type: 'f', name: 'maxX.g', size: 60, date: '2026-06-01T09:00:00' },
+    { type: 'f', name: 'maxY.g', size: 60, date: '2026-06-01T09:00:00' },
+    { type: 'f', name: 'minX.g', size: 60, date: '2026-06-01T09:00:00' },
+    { type: 'f', name: 'minY.g', size: 60, date: '2026-06-01T09:00:00' },
+    { type: 'f', name: 'readme.txt', size: 20, date: '2026-06-01T09:00:00' },
+  ],
+  '/macros/MinMax/Diagonals': [
+    { type: 'f', name: 'maxXmaxY.g', size: 60, date: '2026-06-01T09:00:00' },
+    { type: 'f', name: 'minXmaxY.g', size: 60, date: '2026-06-01T09:00:00' },
+    { type: 'f', name: 'minXminY.g', size: 60, date: '2026-06-01T09:00:00' },
   ],
   '/gcodes': [
     { type: 'f', name: 'bracket_roughing.nc', size: 48210, date: '2026-07-28T14:00:00' },

@@ -462,6 +462,31 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .import-size em { font-size: 12px; font-style: normal; color: var(--text-faint); }
 .import-rule { height: 1px; background: var(--border); margin: 2px 12px; }
 
+/* ---------- Macros ---------- */
+
+.macros { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; height: 100%;
+  min-height: 0; }
+.macro-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.macro-scroll { overflow: auto; min-height: 0; flex: 1 1 auto; }
+/* Buttons flow and wrap: the panel can be any width in the dock, and a fixed
+   column count would either waste half of a wide one or clip a narrow one. */
+.macro-grid { display: flex; flex-wrap: wrap; gap: 5px; }
+.macro-btn {
+  min-height: 34px; padding: 5px 12px; font-size: 13px; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.macro-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+/* A moment's acknowledgement that the press landed. Not progress — a macro can
+   run for minutes, and the machine's own status says whether it is busy. */
+.macro-btn.ran { background: var(--accent); border-color: var(--accent);
+  color: var(--on-accent); }
+/* Folder heading: the name, then a rule running out to the edge. */
+.macro-sep { display: flex; align-items: center; gap: 8px; margin: 12px 0 6px; }
+.macro-sep span { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-faint); font-weight: 600; white-space: nowrap; }
+.macro-sep::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.macro-blocked { color: var(--warn); font-size: 12px; }
+
 /* ---------- Jog ---------- */
 
 .jog { padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; height: 100%;
