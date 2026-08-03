@@ -18,6 +18,8 @@ export interface OmAxis {
   max: number;
   visible: boolean;
   babystep?: number;
+  /** Maximum feed, mm/min (M203). */
+  speed?: number;
 }
 
 export interface OmMove {

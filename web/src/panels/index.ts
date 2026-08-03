@@ -11,3 +11,4 @@ import './om.js';
 import './viewer.js';
 import './probe.js';
 import './machining.js';
+import './preflight.js';

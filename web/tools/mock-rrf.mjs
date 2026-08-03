@@ -29,10 +29,10 @@ const seqs = {
 };
 
 const axes = [
-  { letter: 'X', machinePosition: 260, userPosition: 260, workplaceOffsets: [0,0,0,0,0,0,0,0,0], homed: true, min: 0, max: 523, visible: true },
-  { letter: 'Y', machinePosition: 600, userPosition: 600, workplaceOffsets: [0,0,0,0,0,0,0,0,0], homed: true, min: 0, max: 1262, visible: true },
-  { letter: 'Z', machinePosition: -20, userPosition: -20, workplaceOffsets: [0,0,0,0,0,0,0,0,0], homed: true, min: -180, max: 0, visible: true },
-  { letter: 'U', machinePosition: 30, userPosition: 30, workplaceOffsets: [0,0,0,0,0,0,0,0,0], homed: true, min: 0, max: 60, visible: true },
+  { speed: 6000, letter: 'X', machinePosition: 260, userPosition: 260, workplaceOffsets: [0,0,0,0,0,0,0,0,0], homed: true, min: 0, max: 523, visible: true },
+  { speed: 6000, letter: 'Y', machinePosition: 600, userPosition: 600, workplaceOffsets: [0,0,0,0,0,0,0,0,0], homed: true, min: 0, max: 1262, visible: true },
+  { speed: 2000, letter: 'Z', machinePosition: -20, userPosition: -20, workplaceOffsets: [0,0,0,0,0,0,0,0,0], homed: true, min: -180, max: 0, visible: true },
+  { speed: 8000, letter: 'U', machinePosition: 30, userPosition: 30, workplaceOffsets: [0,0,0,0,0,0,0,0,0], homed: true, min: 0, max: 60, visible: true },
 ];
 
 const state = {

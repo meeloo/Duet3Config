@@ -18,7 +18,7 @@ import { parseGcode, type ParsedToolpath } from '../viewer/parse.js';
 import { ToolpathRenderer, type Box, type Projection, type ViewName } from '../viewer/render.js';
 import type { FileEntry } from '../machine/types.js';
 import { theme, viewerPalette } from '../core/theme.js';
-import { previewProgram } from '../ui/program.js';
+import { loadedProgram, previewProgram } from '../ui/program.js';
 
 const cache = new Map<string, ParsedToolpath>();
 /** Refuse to pull anything past this over the controller's HTTP server. */
@@ -326,6 +326,7 @@ export class ViewerPanel extends PanelElement {
       // a parameter moves, and it has no file on the controller yet.
       this.path = parsed;
       this.loadedFrom = `(generated) ${name}`;
+      loadedProgram.set({ name, controllerPath: null, path: parsed });
       this.renderer?.setToolpath(parsed);
       this.requestUpdate();
     } catch (err) {
@@ -337,6 +338,7 @@ export class ViewerPanel extends PanelElement {
   private applyToolpath(path: string, parsed: ParsedToolpath): void {
     this.path = parsed;
     this.loadedFrom = path;
+    loadedProgram.set({ name: path, controllerPath: path, path: parsed });
     this.renderer?.setToolpath(parsed);
     this.requestUpdate();
   }

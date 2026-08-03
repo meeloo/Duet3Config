@@ -78,8 +78,8 @@ const DEFAULT_LAYOUT: Layout = {
       rows: 2,
       panels: [
         { key: 'viewer-1', id: 'viewer', width: 8, rows: 2 },
+        { key: 'preflight-1', id: 'preflight', width: 4, rows: 1 },
         { key: 'files-1', id: 'files', width: 4, rows: 1 },
-        { key: 'job-2', id: 'job', width: 4, rows: 1 },
       ],
     },
     {

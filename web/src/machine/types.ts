@@ -52,6 +52,8 @@ export interface Axis {
   visible: boolean;
   /** Per-WCS offsets, index 0 = G54. Empty if the controller doesn't expose them. */
   workOffsets: number[];
+  /** Maximum feed for this axis in mm/min, 0 when the controller doesn't say. */
+  maxFeed: number;
 }
 
 export interface Spindle {

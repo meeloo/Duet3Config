@@ -12,6 +12,18 @@ import type { GeneratedProgram } from '../cam/format.js';
 /** Set by a panel to ask the viewer to render a generated program. */
 export const previewProgram = signal<{ name: string; gcode: string } | null>(null);
 
+/**
+ * Whatever the viewer currently has parsed, published so other panels can work
+ * on the same thing the operator is looking at. `controllerPath` is null for a
+ * generated program that has not been written to the machine yet, which is what
+ * tells preflight there is nothing to start.
+ */
+export const loadedProgram = signal<{
+  name: string;
+  controllerPath: string | null;
+  path: import('../viewer/parse.js').ParsedToolpath;
+} | null>(null);
+
 export function preview(program: GeneratedProgram): void {
   previewProgram.set({ name: program.name, gcode: program.gcode });
   appendLog({ level: 'info', text: `Previewing ${program.name}`, time: new Date() });

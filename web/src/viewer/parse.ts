@@ -25,6 +25,18 @@ export interface ParsedToolpath {
   /** Tool numbers seen, in order of first appearance. */
   tools: number[];
   warnings: string[];
+
+  // --- Figures the preflight check needs -------------------------------
+  /** Highest feed rate commanded, mm/min. */
+  maxFeed: number;
+  /** Distinct spindle speeds commanded via M3/M4, in order of appearance. */
+  spindleSpeeds: number[];
+  /** Seconds of cutting, from each segment's length and its feed rate. */
+  cutSeconds: number;
+  /** Total rapid distance in mm — timed by the caller, which knows the machine. */
+  rapidLength: number;
+  /** Lowest Z of a rapid that moves in XY — a retract from depth doesn't count. */
+  minRapidZ: number;
 }
 
 const ARC_TOLERANCE = 0.02; // mm of chord deviation
@@ -44,6 +56,12 @@ export function parseGcode(source: string): ParsedToolpath {
   let plane: 0 | 1 | 2 = 0; // 0 = XY (G17), 1 = XZ (G18), 2 = YZ (G19)
   let motion = 0; // modal motion mode: 0/1/2/3
   let feedActive = false;
+  let feed = 0;          // modal feed rate, mm/min
+  let maxFeed = 0;
+  let cutSeconds = 0;
+  let rapidLength = 0;
+  let minRapidZ = Infinity;
+  const spindleSpeeds: number[] = [];
 
   const min: [number, number, number] = [Infinity, Infinity, Infinity];
   const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
@@ -66,6 +84,22 @@ export function parseGcode(source: string): ParsedToolpath {
     offsets.push(byteOffset, byteOffset);
     const k = cutting ? 1 : 0;
     kinds.push(k, k);
+
+    // Accumulate the figures preflight reports on. Cut time uses the modal
+    // feed; rapids only contribute distance, because how fast a rapid actually
+    // runs is a property of the machine, not the file.
+    const len = Math.hypot(toX - fromX, toY - fromY, toZ - fromZ);
+    if (cutting) {
+      if (feed > 0) cutSeconds += (len / feed) * 60;
+    } else {
+      rapidLength += len;
+      // Only rapids that actually TRAVEL count as low. A vertical retract
+      // starts at cutting depth by definition, and flagging that would fire on
+      // every well-formed program — the thing worth spotting is crossing the
+      // work below the surface.
+      const horizontal = Math.hypot(toX - fromX, toY - fromY) > 1e-6;
+      if (horizontal) minRapidZ = Math.min(minRapidZ, fromZ, toZ);
+    }
     track(fromX, fromY, fromZ);
     track(toX, toY, toZ);
   };
@@ -112,6 +146,10 @@ export function parseGcode(source: string): ParsedToolpath {
         if (!tools.includes(value)) tools.push(value);
       } else if (letter === 'F') {
         feedActive = true;
+        feed = value * unitScale;
+        if (feed > maxFeed) maxFeed = feed;
+      } else if (letter === 'S') {
+        if (value > 0 && !spindleSpeeds.includes(value)) spindleSpeeds.push(value);
       }
     }
 
@@ -181,6 +219,11 @@ export function parseGcode(source: string): ParsedToolpath {
     lineCount: lines.length,
     tools,
     warnings,
+    maxFeed,
+    spindleSpeeds,
+    cutSeconds,
+    rapidLength,
+    minRapidZ: isFinite(minRapidZ) ? minRapidZ : 0,
   };
 }
 

@@ -435,7 +435,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
   border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .viewer-file { font-family: var(--mono); font-size: 11px; color: var(--text-dim);
   margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
-.check { display: flex; gap: 5px; align-items: center; font-size: 12px; color: var(--text-dim); }
+.pf-check { display: flex; gap: 5px; align-items: center; font-size: 12px; color: var(--text-dim); }
 .check input { min-height: 0; width: 15px; height: 15px; }
 .viewer-canvas-wrap { flex: 1; position: relative; min-height: 0; }
 .viewer-canvas-wrap canvas { width: 100%; height: 100%; display: block; touch-action: none; }
@@ -588,3 +588,30 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
   border-bottom: 1px solid var(--border); }
 .viewer-views .seg { min-height: 26px; padding: 3px 9px; font-size: 11px; }
 .viewer-views .seg.proj { margin-left: auto; min-width: 56px; }
+
+/* ---------- Preflight ---------- */
+
+.preflight { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.preflight-head { display: flex; align-items: baseline; gap: 10px; padding: 10px 12px;
+  border-bottom: 1px solid var(--border); }
+.preflight-verdict { font-size: 15px; font-weight: 700; }
+.preflight-head.ok .preflight-verdict { color: var(--good); }
+.preflight-head.warn .preflight-verdict { color: var(--warn); }
+.preflight-head.error .preflight-verdict { color: var(--bad); }
+.preflight-file { font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-check-list { flex: 1; overflow: auto; min-height: 0; padding: 4px 0; }
+.pf-check { display: flex; gap: 9px; padding: 6px 12px; align-items: flex-start; }
+.pf-check-icon { flex: 0 0 auto; width: 17px; height: 17px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700;
+  border: 1px solid currentColor; margin-top: 1px; }
+.pf-check.ok .pf-check-icon { color: var(--good); }
+.pf-check.warn .pf-check-icon { color: var(--warn); }
+.pf-check.error .pf-check-icon { color: var(--bad); }
+.pf-check.info .pf-check-icon { color: var(--text-faint); }
+.pf-check-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.pf-check-body strong { font-size: 13px; font-weight: 600; }
+.pf-check-body span { font-size: 12px; color: var(--text-dim); line-height: 1.45; }
+.pf-check.ok .pf-check-body strong { font-weight: 500; color: var(--text-dim); }
+.preflight-actions { display: flex; gap: 8px; align-items: center; padding: 10px 12px;
+  border-top: 1px solid var(--border); }
