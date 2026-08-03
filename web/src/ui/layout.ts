@@ -79,16 +79,16 @@ const DEFAULT_LAYOUT: Layout = {
       panels: [
         { key: 'viewer-1', id: 'viewer', width: 8, rows: 2 },
         { key: 'preflight-1', id: 'preflight', width: 4, rows: 1 },
-        { key: 'files-1', id: 'files', width: 4, rows: 1 },
+        { key: 'resume-1', id: 'resume', width: 4, rows: 1 },
       ],
     },
     {
       id: 'setup',
       name: 'Setup',
-      rows: 1,
+      rows: 2,
       panels: [
-        { key: 'probe-1', id: 'probe', width: 6, rows: 1 },
-        { key: 'machining-1', id: 'machining', width: 6, rows: 1 },
+        { key: 'probe-1', id: 'probe', width: 6, rows: 2 },
+        { key: 'machining-1', id: 'machining', width: 6, rows: 2 },
       ],
     },
     {
@@ -96,8 +96,9 @@ const DEFAULT_LAYOUT: Layout = {
       name: 'Advanced',
       rows: 1,
       panels: [
-        { key: 'om-1', id: 'om', width: 7, rows: 1 },
-        { key: 'console-2', id: 'console', width: 5, rows: 1 },
+        { key: 'om-1', id: 'om', width: 5, rows: 1 },
+        { key: 'files-1', id: 'files', width: 3, rows: 1 },
+        { key: 'console-2', id: 'console', width: 4, rows: 1 },
       ],
     },
   ],

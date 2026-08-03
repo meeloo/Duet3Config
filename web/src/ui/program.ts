@@ -12,6 +12,9 @@ import type { GeneratedProgram } from '../cam/format.js';
 /** Set by a panel to ask the viewer to render a generated program. */
 export const previewProgram = signal<{ name: string; gcode: string } | null>(null);
 
+/** Byte offset chosen for run-from-line, set by clicking the toolpath. */
+export const resumePoint = signal<{ offset: number; point: [number, number, number] } | null>(null);
+
 /**
  * Whatever the viewer currently has parsed, published so other panels can work
  * on the same thing the operator is looking at. `controllerPath` is null for a

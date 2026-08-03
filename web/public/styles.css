@@ -630,3 +630,12 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
   0%   { margin-left: -40%; }
   100% { margin-left: 100%; }
 }
+
+/* ---------- Run from line ---------- */
+
+.resume { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.resume-state { padding: 6px 12px; overflow: auto; }
+.resume-row { display: flex; justify-content: space-between; gap: 12px;
+  padding: 3px 0; font-size: 12px; border-bottom: 1px solid var(--border); }
+.resume-row span { color: var(--text-dim); }
+.resume-row strong { font-family: var(--mono); font-weight: 500; text-align: right; }

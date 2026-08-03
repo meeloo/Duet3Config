@@ -47,6 +47,8 @@ export interface ViewerPalette {
   bounds: [number, number, number];
   grid: [number, number, number];
   cutter: [number, number, number];
+  /** Chosen run-from-line point. */
+  resume: [number, number, number];
   axisX: [number, number, number];
   axisY: [number, number, number];
   axisZ: [number, number, number];
@@ -68,6 +70,7 @@ const LIGHT: ViewerPalette = {
   bounds: rgb(0xc2cad4),
   grid: rgb(0xdde3ea),
   cutter: rgb(0xe65100),
+  resume: rgb(0x7b1fa2),
   axisX: rgb(0xc62828),
   axisY: rgb(0x2e7d32),
   axisZ: rgb(0x1565c0),
@@ -83,6 +86,7 @@ const DARK: ViewerPalette = {
   bounds: rgb(0x39414d),
   grid: rgb(0x252b34),
   cutter: rgb(0xffbe2e),
+  resume: rgb(0xce93d8),
   axisX: rgb(0xd94a3d),
   axisY: rgb(0x59bf6a),
   axisZ: rgb(0x5a8fe6),

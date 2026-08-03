@@ -334,6 +334,16 @@ export class ToolpathRenderer {
       seg([x, y, z], [x, y, z + s * 2], p.cutter);
     }
 
+    if (this.resumeMarker) {
+      // A diagonal cross, so it reads as distinct from the cutter crosshair
+      // even when the two happen to land on top of each other.
+      const [x, y, z] = this.resumeMarker;
+      const s = axisLen * 0.7;
+      seg([x - s, y - s, z], [x + s, y + s, z], p.resume);
+      seg([x - s, y + s, z], [x + s, y - s, z], p.resume);
+      seg([x, y, z], [x, y, z + s * 3], p.resume);
+    }
+
     const gl = this.gl;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.overlayPos);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pos), gl.DYNAMIC_DRAW);
@@ -367,6 +377,58 @@ export class ToolpathRenderer {
     const view = lookAt(eye, target, [0, 0, 1]);
     return multiply(proj, view);
   }
+
+  /**
+   * Nearest toolpath vertex to a point on the canvas, for click-to-resume.
+   *
+   * Brute force over every vertex: one pass of ~180k points for a 3 MiB file is
+   * a couple of milliseconds, which is nothing for a click, and it avoids
+   * maintaining a spatial index that would have to be rebuilt on every load.
+   *
+   * @param px,py canvas-relative CSS pixels
+   * @returns the source byte offset and world point, or null if nothing is near
+   */
+  pickNearest(
+    px: number,
+    py: number,
+    path: ParsedToolpath,
+    maxPixels = 24,
+  ): { offset: number; point: [number, number, number] } | null {
+    const mvp = this.mvp();
+    const w = this.canvas.clientWidth;
+    const h = this.canvas.clientHeight;
+    if (!w || !h) return null;
+
+    let bestDist = maxPixels * maxPixels;
+    let bestIndex = -1;
+
+    const pos = path.positions;
+    for (let i = 0; i < pos.length; i += 3) {
+      const x = pos[i], y = pos[i + 1], z = pos[i + 2];
+      const cw = mvp[3] * x + mvp[7] * y + mvp[11] * z + mvp[15];
+      if (cw <= 0) continue; // behind the camera
+      const cx = mvp[0] * x + mvp[4] * y + mvp[8] * z + mvp[12];
+      const cy = mvp[1] * x + mvp[5] * y + mvp[9] * z + mvp[13];
+      const sx = ((cx / cw + 1) / 2) * w;
+      const sy = ((1 - cy / cw) / 2) * h;
+      const dx = sx - px;
+      const dy = sy - py;
+      const d = dx * dx + dy * dy;
+      if (d < bestDist) {
+        bestDist = d;
+        bestIndex = i;
+      }
+    }
+
+    if (bestIndex < 0) return null;
+    return {
+      offset: path.offsets[bestIndex / 3],
+      point: [pos[bestIndex], pos[bestIndex + 1], pos[bestIndex + 2]],
+    };
+  }
+
+  /** Marker drawn at a chosen resume point, in work coordinates. */
+  resumeMarker: [number, number, number] | null = null;
 
   resize(): void {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);

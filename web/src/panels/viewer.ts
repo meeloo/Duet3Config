@@ -19,7 +19,7 @@ import { parseAsync } from '../viewer/parse-client.js';
 import { ToolpathRenderer, type Box, type Projection, type ViewName } from '../viewer/render.js';
 import type { FileEntry } from '../machine/types.js';
 import { theme, viewerPalette } from '../core/theme.js';
-import { loadedProgram, previewProgram } from '../ui/program.js';
+import { loadedProgram, previewProgram, resumePoint } from '../ui/program.js';
 
 const cache = new Map<string, ParsedToolpath>();
 /** Refuse to pull anything past this over the controller's HTTP server. */
@@ -44,6 +44,8 @@ export class ViewerPanel extends PanelElement {
   private framedEnvelope = false;
   private files: FileEntry[] = [];
   private pickerOpen = false;
+  /** When on, clicking the toolpath chooses a run-from-line point. */
+  private pickMode = false;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -123,6 +125,15 @@ export class ViewerPanel extends PanelElement {
     let lastY = 0;
 
     canvas.addEventListener('pointerdown', (e) => {
+      if (this.pickMode && e.button === 0 && this.path && this.renderer) {
+        const r = canvas.getBoundingClientRect();
+        const hit = this.renderer.pickNearest(e.clientX - r.left, e.clientY - r.top, this.path);
+        if (hit) {
+          resumePoint.set(hit);
+          this.renderer.resumeMarker = hit.point;
+        }
+        return;
+      }
       dragging = e.button === 2 || e.shiftKey ? 'pan' : 'orbit';
       lastX = e.clientX;
       lastY = e.clientY;
@@ -172,6 +183,11 @@ export class ViewerPanel extends PanelElement {
       },
       { passive: false },
     );
+  }
+
+  private clearResumePoint(): void {
+    resumePoint.set(null);
+    if (this.renderer) this.renderer.resumeMarker = null;
   }
 
   private setView(name: ViewName): void {
@@ -339,6 +355,7 @@ export class ViewerPanel extends PanelElement {
       this.path = parsed;
       this.loadedFrom = `(generated) ${name}`;
       loadedProgram.set({ name, controllerPath: null, path: parsed });
+      this.clearResumePoint();
       this.renderer?.setToolpath(parsed);
       this.requestUpdate();
     } catch (err) {
@@ -351,6 +368,9 @@ export class ViewerPanel extends PanelElement {
     this.path = parsed;
     this.loadedFrom = path;
     loadedProgram.set({ name: path, controllerPath: path, path: parsed });
+    // A resume point belongs to one file; carrying it across would resume at a
+    // byte offset that means something entirely different in another program.
+    this.clearResumePoint();
     this.renderer?.setToolpath(parsed);
     this.requestUpdate();
   }
@@ -449,6 +469,14 @@ export class ViewerPanel extends PanelElement {
               <button class="seg" title=${title} @click=${() => this.setView(name)}>${label}</button>
             `,
           )}
+          <button
+            class=${this.pickMode ? 'seg active' : 'seg'}
+            title="Click the toolpath to choose a run-from-line point"
+            ?disabled=${!this.path}
+            @click=${() => ((this.pickMode = !this.pickMode), this.requestUpdate())}
+          >
+            Pick
+          </button>
           <button
             class="seg proj"
             title=${this.projection === 'ortho'
