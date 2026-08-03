@@ -82,6 +82,22 @@ export function getTool(table: Table, number: number): ToolInfo {
   return table[number] ?? emptyTool(number);
 }
 
+/**
+ * A diameter, to two decimal places at most, with nothing added and nothing
+ * dropped: 8 stays "8", 28.5 stays "28.5", and 0.584 becomes "0.58".
+ *
+ * Rounded rather than cut. The `* (1 + EPSILON)` is what makes an imperial
+ * cutter read correctly: 1/8" is 3.175, but the nearest double is a hair below
+ * it, so `toFixed(2)` reports 3.17 — arithmetically defensible and, on a tool
+ * label, simply wrong. Nudging by one ulp before rounding puts the tie back on
+ * the side the number was written on.
+ */
+export function formatDiameter(mm: number): string {
+  if (!isFinite(mm)) return '0';
+  const rounded = Math.round(Math.abs(mm) * 100 * (1 + Number.EPSILON)) / 100;
+  return String(mm < 0 ? -rounded : rounded);
+}
+
 // --- Libraries ------------------------------------------------------------
 //
 // One table is not enough, because the carousel holds one set of tools at a
@@ -284,7 +300,7 @@ export function describeTool(info: ToolInfo, machineName: string | null): string
   // identifying to attach it to, so an unconfigured slot falls back to the
   // controller's own tool name instead of a meaningless fragment.
   const identity: string[] = [];
-  if (info.diameter > 0) identity.push(`⌀${info.diameter}`);
+  if (info.diameter > 0) identity.push(`⌀${formatDiameter(info.diameter)}`);
   const typeLabel = TOOL_TYPES.find((t) => t.value === info.type)?.label;
   if (info.name) identity.push(info.name);
   else if (typeLabel && info.diameter > 0) identity.push(typeLabel.toLowerCase());

@@ -12,7 +12,7 @@
 
 import type { MachineState } from '../machine/types.js';
 import type { ParsedToolpath } from '../viewer/parse.js';
-import { getTool, type ToolInfo } from '../tools/table.js';
+import { formatDiameter, getTool, type ToolInfo } from '../tools/table.js';
 
 export type CheckLevel = 'ok' | 'warn' | 'error' | 'info';
 
@@ -125,7 +125,7 @@ export function preflight(input: PreflightInput): Check[] {
       } else if (!named) {
         problems.push(`T${t} has no entry in the tool table`);
       }
-      described.push(`T${t}${info.diameter > 0 ? ` ⌀${info.diameter}` : ''}${info.name ? ` ${info.name}` : ''}`);
+      described.push(`T${t}${info.diameter > 0 ? ` ⌀${formatDiameter(info.diameter)}` : ''}${info.name ? ` ${info.name}` : ''}`);
     }
     checks.push(
       problems.length

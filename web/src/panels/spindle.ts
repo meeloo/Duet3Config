@@ -384,7 +384,7 @@ export class SpindlePanel extends PanelElement {
               <label class="param">
                 <span class="param-label">Diameter</span>
                 <span class="param-input">
-                  <input type="number" step="0.1" min="0" .value=${String(info.diameter)}
+                  <input type="number" step="0.01" min="0" .value=${String(info.diameter)}
                     @change=${(e: Event) => this.updateTool(n, { diameter: Number((e.target as HTMLInputElement).value) })} />
                   <em>mm</em>
                 </span>
