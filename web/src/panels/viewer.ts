@@ -575,7 +575,7 @@ export class ViewerPanel extends PanelElement {
           @input=${(e: Event) => this.scrubTo(Number((e.target as HTMLInputElement).value))}
           @change=${() => this.commitScrub()}
         />
-        <span class="transport-time">
+        <span class="transport-time" style="--time-width:${formatDuration(total).length}ch">
           <strong>${formatDuration(at)}</strong>/${formatDuration(total)}
         </span>
         <div class="segmented transport-rates">
@@ -593,8 +593,9 @@ export class ViewerPanel extends PanelElement {
         </div>
         ${cursor
           ? html`<span class="transport-where" title="Source byte offset ${cursor.offset}">
-              X${cursor.point[0].toFixed(1)} Y${cursor.point[1].toFixed(1)}
-              Z${cursor.point[2].toFixed(1)}
+              ${['X', 'Y', 'Z']
+                .map((axis, i) => `${axis}${cursor.point[i].toFixed(1).padStart(7)}`)
+                .join(' ')}
               <em>${cursor.source === 'job' ? 'live' : cursor.source}</em>
             </span>`
           : nothing}

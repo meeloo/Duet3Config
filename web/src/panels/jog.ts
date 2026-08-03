@@ -94,6 +94,28 @@ function polar(r: number, deg: number): [number, number] {
   return [r * Math.cos(a), -r * Math.sin(a)];
 }
 
+/**
+ * SVG rotation that lays a label along its ring, upright.
+ *
+ * Tangential rather than horizontal, and not only for looks: horizontal labels
+ * line up radially on the E and W spokes, so each one may be no WIDER than its
+ * ring is thick — which is what forced the type down to near-illegible at six
+ * rings. Along the arc, the constraint becomes font HEIGHT against ring
+ * thickness, and the arc is far longer than the band is thick. Radial
+ * collisions stop being possible and the type can grow.
+ *
+ * SVG angles run clockwise because Y points down, so the label's own angle is
+ * −θ and the tangent is a further +90°. Anything that would end up reading
+ * upside down — the whole southern half — is flipped by 180°, which is the same
+ * line read from the other end.
+ */
+function labelRotation(deg: number): number {
+  let r = -deg + 90;
+  while (r > 90) r -= 180;
+  while (r < -90) r += 180;
+  return r;
+}
+
 /** Annular sector spanning `deg ± half`, as a path. */
 function sectorPath(rInner: number, rOuter: number, deg: number, half: number): string {
   const [x1, y1] = polar(rOuter, deg - half);
@@ -206,10 +228,11 @@ export class JogPanel extends PanelElement {
       // targets rather than one continuous band.
       const half = 22.5 - 1.2;
       const labelR = (rInner + rOuter) / 2;
-      // Sized to the band, because on the horizontal spokes every ring's label
-      // sits directly beside its neighbours' and the only room a label has is
-      // its own ring's thickness.
-      const fontSize = Math.max(3.6, Math.min(10, (rOuter - rInner) * 0.55));
+      // Sized to the band. With the labels lying along their arc the limit is
+      // the glyph height against the ring thickness, not the text width, so
+      // this can be far more generous than it had to be when they were
+      // horizontal.
+      const fontSize = Math.max(5, Math.min(13, (rOuter - rInner) * 0.62));
 
       for (const octant of OCTANTS) {
         const [lx, ly] = polar(labelR, octant.angle);
@@ -228,7 +251,13 @@ export class JogPanel extends PanelElement {
           >
             <title>${octant.name} ${stepLabel(mm)}mm</title>
             <path d=${sectorPath(rInner, rOuter, octant.angle, half)} />
-            <text x=${lx} y=${ly + fontSize * 0.36} style="font-size:${fontSize}px">${stepTick(mm)}</text>
+            <text
+              x=${lx}
+              y=${ly}
+              dy="0.36em"
+              transform=${`rotate(${labelRotation(octant.angle)} ${lx} ${ly})`}
+              style="font-size:${fontSize}px"
+            >${stepTick(mm)}</text>
           </g>
         `);
       }

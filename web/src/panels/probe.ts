@@ -241,12 +241,12 @@ export class ProbePanel extends PanelElement {
       case 'corner':
         return html`
           ${selectField('Corner X', this.cornerX, [
-            { value: 'left', label: 'Left (probe approaches +X)' },
-            { value: 'right', label: 'Right (probe approaches −X)' },
+            { value: 'left', label: 'Left · approach +X' },
+            { value: 'right', label: 'Right · approach −X' },
           ], (v) => ((this.cornerX = v), this.requestUpdate()))}
           ${selectField('Corner Y', this.cornerY, [
-            { value: 'back', label: 'Back (probe approaches −Y)' },
-            { value: 'front', label: 'Front (probe approaches +Y)' },
+            { value: 'back', label: 'Back · approach −Y' },
+            { value: 'front', label: 'Front · approach +Y' },
           ], (v) => ((this.cornerY = v), this.requestUpdate()))}
           ${checkField('Also zero Z on the top face', this.includeZ, (v) => ((this.includeZ = v), this.requestUpdate()))}
           ${numberField('Plate thickness', this.plateThickness, (v) => ((this.plateThickness = v), this.requestUpdate()), { suffix: 'mm', step: 0.01, title: '0 when probing the surface directly.' })}

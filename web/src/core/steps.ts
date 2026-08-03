@@ -59,11 +59,10 @@ export function stepLabel(mm: number): string {
 /**
  * Compact label for a crowded dial: the leading zero goes.
  *
- * Not cosmetic. On the rose the labels of every ring line up along the
- * horizontal spokes, so a label may be no wider than its ring is thick — and
- * "0.05" is a third wider than ".05" for no information at all. Three
- * characters is then the worst case anywhere on the ladder, which is what makes
- * six rings fit.
+ * The rose's labels lie along their own ring, so the room each one has is the
+ * arc of its sector — shortest on the innermost ring, which is also where the
+ * longest labels live. Dropping a leading zero costs no information and buys a
+ * third of the width back, which is what lets the type stay large down there.
  */
 export function stepTick(mm: number): string {
   return stepLabel(mm).replace(/^0\./, '.');
