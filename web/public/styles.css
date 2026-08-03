@@ -434,21 +434,76 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 
 /* ---------- Jog ---------- */
 
-.jog { padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; height: 100%; }
-.jog-settings { display: flex; flex-direction: column; gap: 6px; }
-.jog-setting { display: flex; flex-direction: column; gap: 3px; }
-/* Don't let the XY/Z pads grow: they would push any aux-axis row (the U dust
-   shoe on this machine) past the bottom of the panel, where reaching a primary
-   motion control would need a scroll. */
-.jog-pads { display: flex; gap: 14px; justify-content: center; align-items: center; flex: 0 0 auto; }
-.jog-xy { display: grid; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 42px); gap: 4px; }
-.jog-z { display: grid; grid-template-rows: repeat(3, 42px); gap: 4px; }
-.jog-btn { min-height: 0; height: 100%; width: 100%; font-size: 17px; padding: 0; touch-action: none; }
-.jog-btn.home { font-size: 15px; color: var(--text-dim); }
-.jog-aux { display: flex; flex-direction: column; gap: 4px; margin-top: auto; }
-.jog-aux-row { display: flex; gap: 4px; align-items: center; }
-.jog-aux-row .jog-btn { width: 46px; height: 32px; }
-.jog-blocked { text-align: center; color: var(--warn); font-size: 12px; }
+.jog { padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; height: 100%;
+  min-height: 0; }
+
+/* Cursors */
+.jog-cursors { display: flex; gap: 16px; flex-wrap: wrap; }
+.jog-cursor { flex: 1 1 190px; display: flex; flex-direction: column; gap: 2px; }
+.jog-cursor-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.jog-cursor-head span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--text-faint); font-weight: 600; }
+.jog-cursor-head strong { font-family: var(--mono); font-size: 15px; }
+.jog-cursor input[type="range"] { width: 100%; accent-color: var(--accent); min-height: 24px;
+  padding: 0; margin: 0; background: transparent; border: 0; }
+/* The rungs the reach cursor currently spans. Left-aligned as a list, NOT
+   spread across the slider: the slider covers the whole ladder and only four of
+   its rungs are on the rose, so justifying them under it would imply a mapping
+   that isn't there. */
+.jog-cursor-foot { display: flex; gap: 5px; font-family: var(--mono); font-size: 10px;
+  color: var(--text-faint); flex-wrap: wrap; }
+.jog-cursor-foot em { font-style: normal; }
+.jog-cursor-foot em + em::before { content: '· '; opacity: 0.6; }
+
+/* Pads */
+.jog-pads { display: flex; gap: 10px; align-items: stretch; justify-content: center;
+  flex: 1 1 auto; min-height: 0; }
+/* Columns take the full height; the rose is square so it centres in what's left. */
+.jog-pads .rose { align-self: center; }
+
+/* The rose. Squares itself off the shorter dimension so it stays circular in a
+   panel of any proportion, and never grows past what the columns beside it are. */
+.rose { flex: 0 1 auto; height: 100%; width: auto; max-width: 100%; aspect-ratio: 1;
+  min-height: 190px; touch-action: none; }
+.rose-cell path {
+  fill: var(--bg-raised);
+  stroke: var(--border-strong);
+  stroke-width: 0.8;
+  transition: fill 80ms;
+}
+.rose-cell text {
+  fill: var(--text-dim); font-family: var(--mono); font-weight: 600;
+  text-anchor: middle; pointer-events: none; user-select: none;
+}
+.rose-cell:hover path { fill: var(--tint-accent); stroke: var(--accent); }
+.rose-cell:hover text { fill: var(--accent); }
+.rose-cell:active path { fill: var(--accent); }
+.rose-cell:active text { fill: var(--on-accent); }
+.rose-cell.disabled { pointer-events: none; opacity: 0.35; }
+
+.rose-hub circle { fill: var(--bg-raised); stroke: var(--border-strong); stroke-width: 0.8; }
+.rose-hub text { fill: var(--text-dim); font-size: 11px; text-anchor: middle; font-weight: 600;
+  pointer-events: none; user-select: none; }
+.rose-hub:hover circle { fill: var(--tint-accent); stroke: var(--accent); }
+.rose-hub.disabled { pointer-events: none; opacity: 0.35; }
+
+/* Z / U columns. Mirror the rose: biggest step furthest from the middle. */
+.jog-column { display: flex; flex-direction: column; gap: 3px; flex: 0 0 auto; min-width: 54px; }
+.jog-column-name { text-align: center; font-weight: 700; font-size: 13px; color: var(--text-dim);
+  letter-spacing: 0.06em; }
+.jog-cell {
+  flex: 1 1 0; min-height: 0; padding: 2px 6px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 0; line-height: 1.05;
+  touch-action: none;
+}
+.jog-cell .jog-arrow { font-size: 10px; color: var(--text-faint); }
+.jog-cell .jog-mm { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+.jog-cell.home { color: var(--text-dim); font-size: 15px; flex: 0 0 34px; }
+.jog-cell:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.jog-cell:hover:not(:disabled) .jog-arrow { color: var(--accent); }
+
+.jog-foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; flex: 0 0 auto; }
+.jog-blocked { color: var(--warn); font-size: 12px; margin-left: auto; }
 
 /* ---------- Status ---------- */
 

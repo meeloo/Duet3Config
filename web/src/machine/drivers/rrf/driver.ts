@@ -424,13 +424,17 @@ export class RrfDriver implements MachineDriver {
     return '';
   }
 
-  async jog(axis: string, opts: JogOptions): Promise<void> {
-    // G91 relative, move, then back to G90 — RRF has no continuous-jog code, so
+  async jog(deltas: Record<string, number>, opts: JogOptions): Promise<void> {
+    const words = Object.entries(deltas)
+      .filter(([, d]) => d !== 0)
+      .map(([axis, d]) => `${axis.toUpperCase()}${d}`)
+      .join(' ');
+    if (!words) return;
+    // One G1 for every axis, so a diagonal is interpolated rather than stepped.
+    // G91 relative, move, then back — RRF has no continuous-jog code, so
     // hold-to-jog is built from repeated discrete moves at the UI layer.
     const prefix = opts.machineCoords ? 'G53 ' : '';
-    await this.send(
-      `M120\nG91\n${prefix}G1 ${axis}${opts.distance} F${opts.feedRate}\nM121`,
-    );
+    await this.send(`M120\nG91\n${prefix}G1 ${words} F${opts.feedRate}\nM121`);
   }
 
   async home(axes?: string[]): Promise<void> {

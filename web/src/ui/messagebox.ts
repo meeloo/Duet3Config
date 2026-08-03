@@ -73,7 +73,7 @@ export class MessageBox extends PanelElement {
                         <span>${axis}</span>
                         ${[-1, -0.1, 0.1, 1].map(
                           (d) => html`
-                            <button @click=${() => void actions.jog(axis, d, 600)}>
+                            <button @click=${() => void actions.jog({ [axis]: d }, 600)}>
                               ${d > 0 ? `+${d}` : d}
                             </button>
                           `,

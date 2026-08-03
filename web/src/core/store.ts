@@ -124,8 +124,8 @@ export async function run<T>(what: string, fn: (d: MachineDriver) => Promise<T>)
 
 export const actions = {
   send: (cmd: string) => run(`send ${cmd}`, (d) => d.send(cmd)),
-  jog: (axis: string, distance: number, feedRate: number) =>
-    run(`jog ${axis}`, (d) => d.jog(axis, { distance, feedRate })),
+  jog: (deltas: Record<string, number>, feedRate: number) =>
+    run(`jog ${Object.keys(deltas).join('')}`, (d) => d.jog(deltas, { feedRate })),
   home: (axes?: string[]) => run('home', (d) => d.home(axes)),
   setWorkZero: (axis: string, value = 0, wcs?: number) =>
     run(`zero ${axis}`, (d) => d.setWorkZero(axis, value, wcs)),

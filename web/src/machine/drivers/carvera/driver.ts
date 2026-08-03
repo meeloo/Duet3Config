@@ -75,7 +75,7 @@ export class CarveraDriver implements MachineDriver {
   async query(_command: string): Promise<string> {
     todo('query');
   }
-  async jog(_axis: string, _opts: JogOptions): Promise<void> {
+  async jog(_deltas: Record<string, number>, _opts: JogOptions): Promise<void> {
     todo('jog');
   }
   async home(_axes?: string[]): Promise<void> {

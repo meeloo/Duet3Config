@@ -27,8 +27,6 @@ export interface ConnectionConfig {
 }
 
 export interface JogOptions {
-  /** Relative distance in mm (signed). */
-  distance: number;
   /** Feed rate in mm/min. */
   feedRate: number;
   /** Machine coordinates rather than work coordinates. */
@@ -56,7 +54,17 @@ export interface MachineDriver {
   /** Send a command and resolve with the controller's reply text. */
   query(command: string): Promise<string>;
 
-  jog(axis: string, opts: JogOptions): Promise<void>;
+  /**
+   * Relative move on one or more axes at once.
+   *
+   * A map rather than a single axis because a diagonal has to be ONE
+   * coordinated move: issuing X then Y as separate commands traces an L through
+   * whatever is in the corner, at full jog speed, which is precisely the shape
+   * you were trying not to make.
+   *
+   * @param deltas signed millimetres per axis letter, e.g. { X: 5, Y: -5 }
+   */
+  jog(deltas: Record<string, number>, opts: JogOptions): Promise<void>;
   home(axes?: string[]): Promise<void>;
   /**
    * Set the work offset for `axis` so the current position reads `value`.
