@@ -18,6 +18,15 @@ import {
   machine,
 } from '../core/store.js';
 import { DRIVERS, driverInfo } from '../machine/registry.js';
+import {
+  addPage,
+  pageTabs,
+  panelPickerOpen,
+  removePage,
+  renamePage,
+  renamingPage,
+  selectPage,
+} from './layout.js';
 import { statusClass, statusLabel } from './widgets.js';
 import { theme, toggleTheme } from '../core/theme.js';
 import {
@@ -51,6 +60,9 @@ export class TopBar extends PanelElement {
       controllerUrl.get();
       driverId.get();
       theme.get();
+      pageTabs.get();
+      renamingPage.get();
+      panelPickerOpen.get();
     });
   }
 
@@ -195,110 +207,169 @@ export class TopBar extends PanelElement {
     `;
   }
 
+  // --- Page tabs ----------------------------------------------------------
+
+  /**
+   * The dashboard's pages, rendered here.
+   *
+   * They used to have a strip of their own directly beneath this one, which
+   * meant two full-width bands of chrome above the actual machine controls. The
+   * pages are still the dashboard's state — it publishes them and this calls
+   * back in — so nothing about how a page works moved, only where its tab is
+   * drawn.
+   */
+  private renderPages(): TemplateResult {
+    const { pages, active } = pageTabs.get();
+    const renaming = renamingPage.get();
+
+    return html`
+      <nav class="pages">
+        ${pages.map((page, i) => {
+          const isActive = i === active;
+          if (renaming === page.id) {
+            return html`<input
+              class="page-rename"
+              .value=${page.name}
+              autofocus
+              @keydown=${(e: KeyboardEvent) => {
+                if (e.key === 'Enter') renamePage(i, (e.target as HTMLInputElement).value);
+                if (e.key === 'Escape') renamingPage.set(null);
+              }}
+              @blur=${(e: Event) => renamePage(i, (e.target as HTMLInputElement).value)}
+            />`;
+          }
+          return html`
+            <button
+              class="page-tab ${isActive ? 'active' : ''}"
+              title=${`${page.name} — press ${i + 1}`}
+              @click=${() => (isActive ? renamingPage.set(page.id) : selectPage(i))}
+            >
+              <span class="page-key">${i + 1}</span>${page.name}
+              ${isActive && pages.length > 1
+                ? html`<span
+                    class="page-close"
+                    title="Delete page"
+                    @click=${(e: Event) => (e.stopPropagation(), removePage(i))}
+                    >✕</span
+                  >`
+                : nothing}
+            </button>
+          `;
+        })}
+        <button class="page-add" title="Add a page" @click=${() => addPage()}>+</button>
+        <button
+          class="tiny"
+          title="Add a panel to this page"
+          @click=${() => panelPickerOpen.set(!panelPickerOpen.peek())}
+        >
+          ${panelPickerOpen.get() ? 'Close' : '+ Panel'}
+        </button>
+      </nav>
+    `;
+  }
+
   protected override render(): TemplateResult {
     const state = machine.get();
-    const isConnected = connected.get();
+    const live = connected.get();
     const busy = connecting.get();
-    const info = driverInfo(driverId.get());
     const err = connectionError.get();
+    const info = driverInfo(driverId.get());
 
     return html`
       <div class="topbar">
-        <div class="brand">CNC</div>
+        <button
+          class=${this.showSettings ? 'gear active' : 'gear'}
+          title="Preferences — connection, appearance, shared settings"
+          @click=${() => ((this.showSettings = !this.showSettings), this.requestUpdate())}
+        >
+          ⚙
+        </button>
 
-        <div class="conn">
-          <select
-            .value=${driverId.get()}
-            ?disabled=${isConnected}
-            @change=${(e: Event) => driverId.set((e.target as HTMLSelectElement).value)}
-            title="Controller type"
-          >
-            ${DRIVERS.map(
-              (d) => html`
-                <option value=${d.id} ?selected=${d.id === driverId.get()}>
-                  ${d.label}${d.ready ? '' : ' — not implemented'}
-                </option>
-              `,
-            )}
-          </select>
+        ${this.renderPages()}
 
-          <input
-            type="text"
-            class="url"
-            .value=${controllerUrl.get()}
-            placeholder=${info?.urlHint ?? 'http://…'}
-            ?disabled=${isConnected}
-            @change=${(e: Event) => controllerUrl.set((e.target as HTMLInputElement).value)}
-          />
-
-          <button
-            class=${isConnected ? 'ghost' : 'primary'}
-            ?disabled=${busy || (!isConnected && info?.ready === false)}
-            @click=${() => void this.toggleConnection()}
-          >
-            ${busy ? 'Connecting…' : isConnected ? 'Disconnect' : 'Connect'}
-          </button>
-
-          <button
-            class="icon"
-            title="Connection settings"
-            @click=${() => ((this.showSettings = !this.showSettings), this.requestUpdate())}
-          >
-            ⚙
-          </button>
-        </div>
-
-        <div class="identity">${state.identity ?? (info?.label ?? '')}</div>
+        <span class="topbar-spacer"></span>
 
         <div class="status-area">
           <span class="pill ${statusClass(state.status)}">${statusLabel(state.status)}</span>
           ${state.tool
-            ? html`<span class="pill dim">T${state.tool.number}${
-                state.tool.name ? ` · ${state.tool.name}` : ''
-              }</span>`
+            ? html`<span class="pill active" title="Active tool">
+                T${state.tool.number}${state.tool.name ? ` · ${state.tool.name}` : ''}
+              </span>`
+            : nothing}
+          <span class="identity">${state.identity ?? (info?.label ?? '')}</span>
+          ${!live
+            ? html`<button
+                class="tiny"
+                ?disabled=${busy}
+                @click=${() => void this.toggleConnection()}
+              >
+                ${busy ? 'Connecting…' : 'Connect'}
+              </button>`
             : nothing}
         </div>
 
-        <button
-          class="icon"
-          title=${theme.get() === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
-          @click=${() => toggleTheme()}
-        >
-          ${theme.get() === 'light' ? '◐' : '◑'}
-        </button>
-
-        <button
-          class="estop"
-          title="Emergency stop (M112)"
-          ?disabled=${!isConnected}
-          @click=${() => void actions.estop()}
-        >
+        <button class="estop" title="Emergency stop (M112) — or press Escape twice"
+          @click=${() => void actions.estop()}>
           STOP
         </button>
       </div>
 
-      ${this.showSettings
-        ? html`
-            <div class="conn-settings">
-              <label>
-                Password
-                <input
-                  type="password"
-                  .value=${this.password}
-                  placeholder="(blank for default)"
-                  @change=${(e: Event) => (this.password = (e.target as HTMLInputElement).value)}
-                />
-              </label>
-              <p class="hint">
-                Serving this page from somewhere other than the controller needs CORS enabled
-                on it. On RepRapFirmware that is <code>M586 C"*"</code> in
-                <code>config-network.g</code>.
-              </p>
-              ${this.renderSettingsSync()}
-            </div>
-          `
-        : nothing}
+      ${this.showSettings ? this.renderPreferences() : nothing}
       ${err ? html`<div class="conn-error">${err}</div>` : nothing}
+    `;
+  }
+
+  /** Everything that is set once and then left alone. */
+  private renderPreferences(): TemplateResult {
+    const live = connected.get();
+    const busy = connecting.get();
+
+    return html`
+      <div class="conn-settings">
+        <div class="pref-row">
+          <label>
+            Controller
+            <select
+              @change=${(e: Event) => driverId.set((e.target as HTMLSelectElement).value)}
+            >
+              ${DRIVERS.map(
+                (d) => html`<option value=${d.id} ?selected=${d.id === driverId.get()}>
+                  ${d.label}
+                </option>`,
+              )}
+            </select>
+          </label>
+          <label>
+            Address
+            <input
+              class="url"
+              .value=${controllerUrl.get()}
+              spellcheck="false"
+              @change=${(e: Event) => controllerUrl.set((e.target as HTMLInputElement).value)}
+            />
+          </label>
+          <label>
+            Password
+            <input
+              type="password"
+              .value=${this.password}
+              placeholder="(blank for default)"
+              @change=${(e: Event) => (this.password = (e.target as HTMLInputElement).value)}
+            />
+          </label>
+          <button ?disabled=${busy} @click=${() => void this.toggleConnection()}>
+            ${busy ? 'Connecting…' : live ? 'Disconnect' : 'Connect'}
+          </button>
+          <button class="tiny" title="Switch between light and dark" @click=${() => toggleTheme()}>
+            ${theme.get() === 'dark' ? '☀ Light' : '☾ Dark'}
+          </button>
+        </div>
+        <p class="hint">
+          Serving this page from somewhere other than the controller needs CORS enabled on it.
+          On RepRapFirmware that is <code>M586 C"*"</code> in <code>config-network.g</code>.
+        </p>
+        ${this.renderSettingsSync()}
+      </div>
     `;
   }
 }

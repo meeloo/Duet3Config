@@ -132,32 +132,44 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 
 /* ---------- Top bar ---------- */
 
+/* One row, not two. Left to right: preferences, page tabs, then everything that
+   answers "is the machine alright" pinned to the right where it is always in
+   the same place — status, identity, and the stop button hard against the
+   corner. Anything set once and left alone lives in the preferences drawer. */
 .topbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
+  gap: 8px;
+  padding: 5px 8px 5px 4px;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 40;
-  flex-wrap: wrap;
 }
-.brand { font-weight: 700; letter-spacing: 0.14em; color: var(--text-dim); font-size: 12px; }
-.conn { display: flex; gap: 6px; align-items: center; }
-.conn .url { width: 200px; }
-.identity { color: var(--text-dim); font-size: 12px; flex: 1; min-width: 0;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.status-area { display: flex; gap: 6px; }
+.topbar-spacer { flex: 1 1 auto; min-width: 8px; }
+
+/* Deliberately large: it is the only way to reach the connection settings, and
+   it sits in the corner where a thumb lands. */
+.gear {
+  min-height: 38px; min-width: 38px; padding: 0 10px; font-size: 19px; line-height: 1;
+  background: transparent; border-color: transparent; color: var(--text-dim);
+}
+.gear:hover { background: var(--bg-raised); border-color: var(--border); }
+.gear.active { background: var(--tint-accent); border-color: var(--accent); color: var(--accent); }
+
+.identity { color: var(--text-dim); font-size: 12px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 24ch; }
+.status-area { display: flex; gap: 6px; align-items: center; flex: 0 0 auto; }
 
 .pill {
   display: inline-block;
-  padding: 5px 11px;
+  padding: 4px 10px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
   border: 1px solid var(--border-strong);
+  white-space: nowrap;
 }
 .pill.good { color: var(--good); border-color: var(--good); }
 .pill.warn { color: var(--warn); border-color: var(--warn); }
@@ -172,8 +184,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
   color: #fff;
   font-weight: 800;
   letter-spacing: 0.08em;
-  min-width: 84px;
-  min-height: 44px;
+  min-width: 78px;
+  min-height: 38px;
+  flex: 0 0 auto;
 }
 .estop:hover:not(:disabled) { background: color-mix(in srgb, var(--bad) 88%, white); }
 
@@ -181,23 +194,13 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
   padding: 10px 14px;
   background: var(--bg-raised);
   border-bottom: 1px solid var(--border);
-  display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  display: flex; flex-direction: column; gap: 8px;
 }
-.conn-settings label { display: flex; gap: 8px; align-items: center; font-size: 13px; }
-.conn-settings p { margin: 0; }
-/* Shared settings, inside the connection drawer. */
-.sync-settings { display: flex; flex-direction: column; gap: 6px; padding-top: 8px;
-  border-top: 1px solid var(--border); flex-basis: 100%; }
-.sync-head { display: flex; align-items: baseline; gap: 8px; }
-.sync-head span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
-  color: var(--text-faint); font-weight: 600; }
-.sync-head code { font-size: 11px; color: var(--text-dim); }
-.sync-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.sync-follow { display: flex; align-items: center; gap: 6px; font-size: 12px;
+.pref-row { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
+.conn-settings label { display: flex; flex-direction: column; gap: 3px; font-size: 12px;
   color: var(--text-dim); }
-.sync-follow input { width: 15px; height: 15px; min-height: 0; }
-.hint.warn { color: var(--warn); }
-
+.conn-settings .url { width: 220px; }
+.conn-settings p { margin: 0; }
 .conn-error {
   padding: 8px 14px;
   background: var(--tint-bad);
@@ -206,15 +209,29 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
   font-size: 13px;
 }
 
+/* Shared settings, inside the preferences drawer. */
+.sync-settings { display: flex; flex-direction: column; gap: 6px; padding-top: 8px;
+  border-top: 1px solid var(--border); }
+.sync-head { display: flex; align-items: baseline; gap: 8px; }
+.sync-head span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--text-faint); font-weight: 600; }
+.sync-head code { font-size: 11px; color: var(--text-dim); }
+.sync-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+/* Scoped to beat `.conn-settings label`, which stacks its children in a column
+   for the labelled fields above — this one is a checkbox and its text. */
+.conn-settings .sync-follow { display: flex; flex-direction: row; align-items: center;
+  gap: 6px; font-size: 12px; color: var(--text-dim); }
+.sync-follow input { width: 15px; height: 15px; min-height: 0; }
+.hint.warn { color: var(--warn); }
+
 /* ---------- Dashboard grid ---------- */
 
-/* Page tabs */
-.pages {
-  display: flex; align-items: center; gap: 4px;
-  padding: 5px 8px; background: var(--bg-panel);
-  border-bottom: 1px solid var(--border); flex: 0 0 auto; flex-wrap: wrap;
-}
-.pages-spacer { flex: 1; }
+/* Page tabs — inside the top bar row. No wrapping: this row must stay one line
+   tall whatever is on it, or the machine controls move down the screen every
+   time a page is added. */
+.pages { display: flex; align-items: center; gap: 4px; flex: 0 1 auto; min-width: 0;
+  overflow-x: auto; scrollbar-width: none; }
+.pages::-webkit-scrollbar { display: none; }
 .page-tab {
   display: inline-flex; align-items: center; gap: 6px;
   min-height: 30px; padding: 4px 10px; font-size: 13px;

@@ -24,6 +24,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { createDockview, type DockviewApi, type DockviewTheme, type IContentRenderer } from 'dockview-core';
 import { PanelElement, panelDefinition, panelDefinitions } from './panel.js';
 import { capabilities, loadSetting, saveSetting } from '../core/store.js';
+import { signal } from '../core/signal.js';
 import { theme } from '../core/theme.js';
 
 interface PageState {
@@ -57,6 +58,42 @@ interface PageSpec {
   stacked?: Record<string, string>;
 }
 
+/**
+ * Page state, published for the top bar.
+ *
+ * The tabs used to sit in their own row directly under the top bar, which meant
+ * two full-width strips of chrome above a machine control. Merging them puts the
+ * tabs in the top bar — but the pages themselves are still the dashboard's, so
+ * rather than move the state, the dashboard publishes it here and the top bar
+ * calls back in. There is exactly one dashboard, which is what makes a module
+ * reference honest rather than a shortcut.
+ */
+export const pageTabs = signal<{ pages: Array<{ id: string; name: string }>; active: number }>({
+  pages: [],
+  active: 0,
+});
+
+/** Tab being renamed in place, by page id. */
+export const renamingPage = signal<string | null>(null);
+
+/** Whether the add-a-panel picker is showing. */
+export const panelPickerOpen = signal(false);
+
+let host: DashboardHost | null = null;
+
+export function selectPage(index: number): void {
+  host?.goToPage(index);
+}
+export function addPage(): void {
+  host?.addPage();
+}
+export function removePage(index: number): void {
+  host?.removePage(index);
+}
+export function renamePage(index: number, name: string): void {
+  host?.renamePage(index, name);
+}
+
 const DEFAULT_PAGES: PageSpec[] = [
   { id: 'control', name: 'Control', panels: ['dro', 'jog', 'spindle'], stacked: { job: 'spindle', console: 'spindle' } },
   {
@@ -82,8 +119,6 @@ export class DashboardHost extends PanelElement {
   private views = new Map<string, { api: DockviewApi; host: HTMLElement }>();
   /** One element per panel instance id, reused across drags and page switches. */
   private elements = new Map<string, PanelElement>();
-  private pickerOpen = false;
-  private renaming: string | null = null;
   private resizeObserver: ResizeObserver | null = null;
 
   override connectedCallback(): void {
@@ -93,8 +128,12 @@ export class DashboardHost extends PanelElement {
       const t = theme.get();
       for (const { api } of this.views.values()) api.updateOptions({ theme: dvTheme(t) });
     });
+    host = this;
+    this.publishTabs();
+    this.bind(() => panelPickerOpen.get());
     window.addEventListener('keydown', this.onKeyDown);
     this.onDispose(() => {
+      if (host === this) host = null;
       window.removeEventListener('keydown', this.onKeyDown);
       this.resizeObserver?.disconnect();
       for (const { api } of this.views.values()) api.dispose();
@@ -118,7 +157,22 @@ export class DashboardHost extends PanelElement {
       page.known = [...new Set([...(page.known ?? []), ...api.panels.map((p) => p.id)])];
     }
     saveSetting('dockLayout', this.state);
+    this.publishTabs();
     this.requestUpdate();
+  }
+
+  private publishTabs(): void {
+    pageTabs.set({
+      pages: this.state.pages.map((p) => ({ id: p.id, name: p.name })),
+      active: Math.min(this.state.active, this.state.pages.length - 1),
+    });
+  }
+
+  /** Switch page. Public because the top bar owns the tabs now. */
+  goToPage(index: number): void {
+    if (index < 0 || index >= this.state.pages.length) return;
+    this.state.active = index;
+    this.persist();
   }
 
   private onKeyDown = (e: KeyboardEvent): void => {
@@ -127,8 +181,7 @@ export class DashboardHost extends PanelElement {
     if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
     const n = Number(e.key);
     if (!Number.isInteger(n) || n < 1 || n > this.state.pages.length) return;
-    this.state.active = n - 1;
-    this.persist();
+    this.goToPage(n - 1);
   };
 
   // --- Dockview plumbing --------------------------------------------------
@@ -305,18 +358,18 @@ export class DashboardHost extends PanelElement {
     // A panel already on this page gets a fresh instance id so it can appear twice.
     const id = view.api.getPanel(panelId) ? `${panelId}~${Date.now().toString(36)}` : panelId;
     view.api.addPanel({ id, component: panelId, title: def.title });
-    this.pickerOpen = false;
+    panelPickerOpen.set(false);
     this.persist();
   }
 
-  private addPage(): void {
+  addPage(): void {
     const id = `page-${Date.now().toString(36)}`;
     this.state.pages.push({ id, name: `Page ${this.state.pages.length + 1}`, layout: null });
     this.state.active = this.state.pages.length - 1;
     this.persist();
   }
 
-  private removePage(index: number): void {
+  removePage(index: number): void {
     if (this.state.pages.length <= 1) return;
     const page = this.state.pages[index];
     if (!confirm(`Delete the "${page.name}" page?`)) return;
@@ -331,9 +384,9 @@ export class DashboardHost extends PanelElement {
     this.persist();
   }
 
-  private renamePage(index: number, name: string): void {
+  renamePage(index: number, name: string): void {
     this.state.pages[index].name = name || this.state.pages[index].name;
-    this.renaming = null;
+    renamingPage.set(null);
     this.persist();
   }
 
@@ -345,7 +398,7 @@ export class DashboardHost extends PanelElement {
     this.views.clear();
     this.elements.clear();
     this.state = defaultLayout();
-    this.pickerOpen = false;
+    panelPickerOpen.set(false);
     this.persist();
   }
 
@@ -356,50 +409,9 @@ export class DashboardHost extends PanelElement {
     const available = panelDefinitions().filter((d) => !d.available || d.available(caps));
 
     return html`
-      <nav class="pages">
-        ${this.state.pages.map((page, i) => {
-          const active = i === this.state.active;
-          if (this.renaming === page.id) {
-            return html`<input
-              class="page-rename"
-              .value=${page.name}
-              autofocus
-              @keydown=${(e: KeyboardEvent) => {
-                if (e.key === 'Enter') this.renamePage(i, (e.target as HTMLInputElement).value);
-                if (e.key === 'Escape') ((this.renaming = null), this.requestUpdate());
-              }}
-              @blur=${(e: Event) => this.renamePage(i, (e.target as HTMLInputElement).value)}
-            />`;
-          }
-          return html`
-            <button
-              class="page-tab ${active ? 'active' : ''}"
-              title=${`${page.name} — press ${i + 1}`}
-              @click=${() => {
-                if (active) this.renaming = page.id;
-                else this.state.active = i;
-                this.persist();
-              }}
-            >
-              <span class="page-key">${i + 1}</span>${page.name}
-              ${active && this.state.pages.length > 1
-                ? html`<span class="page-close" title="Delete page"
-                    @click=${(e: Event) => (e.stopPropagation(), this.removePage(i))}>✕</span>`
-                : nothing}
-            </button>
-          `;
-        })}
-        <button class="page-add" title="Add a page" @click=${() => this.addPage()}>+</button>
-        <span class="pages-spacer"></span>
-        <button class="tiny" title="Add a panel to this page"
-          @click=${() => ((this.pickerOpen = !this.pickerOpen), this.requestUpdate())}>
-          ${this.pickerOpen ? 'Close' : '+ Panel'}
-        </button>
-      </nav>
-
       <div class="dv-container"></div>
 
-      ${this.pickerOpen
+      ${panelPickerOpen.get()
         ? html`
             <div class="picker">
               <div class="picker-list">
@@ -414,7 +426,7 @@ export class DashboardHost extends PanelElement {
               </div>
               <div class="picker-foot">
                 <button class="ghost" @click=${() => this.resetAll()}>Reset all pages</button>
-                <button class="ghost" @click=${() => ((this.pickerOpen = false), this.requestUpdate())}>
+                <button class="ghost" @click=${() => panelPickerOpen.set(false)}>
                   Close
                 </button>
               </div>
