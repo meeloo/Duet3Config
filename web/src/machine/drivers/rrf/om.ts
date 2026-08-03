@@ -31,6 +31,16 @@ export interface OmMove {
     topSpeed?: number;
     acceleration?: number;
   };
+  /**
+   * G68 coordinate rotation. Present only in firmware built with
+   * SUPPORT_COORDINATE_ROTATION, so absent is "not supported", not "zero".
+   * `centre` is in *machine* coordinates — G68 takes it in work coordinates and
+   * the firmware adds the workplace offset before storing it.
+   */
+  rotation?: {
+    angle: number;
+    centre: number[];
+  };
 }
 
 export interface OmMessageBox {

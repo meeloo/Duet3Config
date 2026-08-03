@@ -46,6 +46,9 @@ export class RrfDriver implements MachineDriver {
     fileWrite: true,
     macros: true,
     workCoordinateSystems: 9,
+    // G68/G69, XY plane only. Experimental in RRF but present since 3.4, and
+    // 3.6.1 fixed the direction to anticlockwise as the standard requires.
+    coordinateRotation: true,
     jobFilePosition: true,
     toolChanger: true,
     prompts: true,
@@ -286,6 +289,16 @@ export class RrfDriver implements MachineDriver {
       axes,
       wcs: m.move?.workplaceNumber != null ? m.move.workplaceNumber + 1 : 1,
       wcsCount: 9,
+      // Absent `move.rotation` means the firmware wasn't built with coordinate
+      // rotation at all; a zero angle means it is supported but not in use.
+      // Both surface as null, and the capability flag below tells them apart.
+      rotation:
+        m.move?.rotation && m.move.rotation.angle !== 0
+          ? {
+              angle: m.move.rotation.angle,
+              centre: [m.move.rotation.centre?.[0] ?? 0, m.move.rotation.centre?.[1] ?? 0],
+            }
+          : null,
       spindle: spindleOm
         ? {
             active: spindleOm.active ?? 0,
@@ -410,15 +423,33 @@ export class RrfDriver implements MachineDriver {
     await this.send(`G28 ${axes.map((a) => a.toUpperCase()).join(' ')}`);
   }
 
-  async setWorkZero(axis: string, value: number): Promise<void> {
+  async setWorkZero(axis: string, value: number, wcs = this.state.wcs): Promise<void> {
     // G10 L20 sets the offset so the current position reads `value`.
-    await this.send(`G10 L20 P${this.state.wcs} ${axis.toUpperCase()}${value}`);
+    await this.send(`G10 L20 P${wcs} ${axis.toUpperCase()}${value}`);
+  }
+
+  async setWorkOffset(wcs: number, axis: string, machineValue: number): Promise<void> {
+    // L2 writes the offset itself rather than deriving it from where the
+    // machine happens to be, so it works while the machine is parked anywhere
+    // — including while it is unhomed and the current position is a fiction.
+    await this.send(`G10 L2 P${wcs} ${axis.toUpperCase()}${machineValue}`);
   }
 
   async selectWcs(index: number): Promise<void> {
     // G54..G59 are 54..59; G59.1..G59.3 continue past that.
     const code = index <= 6 ? `G${53 + index}` : `G59.${index - 6}`;
     await this.send(code);
+  }
+
+  async setRotation(angle: number, centreX: number, centreY: number): Promise<void> {
+    // R, and one of A/X plus one of B/Y, are all mandatory — RRF's HandleG68
+    // does MustSee on each, so omitting the centre is an error rather than a
+    // rotation about the origin.
+    await this.send(`G68 X${centreX} Y${centreY} R${angle}`);
+  }
+
+  async clearRotation(): Promise<void> {
+    await this.send('G69');
   }
 
   async emergencyStop(): Promise<void> {

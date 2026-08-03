@@ -31,6 +31,16 @@ interface PageState {
   name: string;
   /** dockview's serialised layout, or null for a page never opened. */
   layout: unknown | null;
+  /**
+   * Every panel id this page has ever held.
+   *
+   * A saved layout would otherwise freeze the page at whatever the defaults
+   * were the day it was saved, so a panel added to DEFAULT_PAGES later would
+   * never reach anyone who had used the app before. Comparing against this
+   * instead of against the current layout adds a genuinely new default once,
+   * while a panel the operator closed on purpose stays closed.
+   */
+  known?: string[];
 }
 
 interface LayoutState {
@@ -57,7 +67,9 @@ const DEFAULT_PAGES: PageSpec[] = [
     // are never wanted simultaneously, so they share a group as tabs.
     stacked: { overrides: 'preflight', resume: 'preflight', files: 'preflight' },
   },
-  { id: 'setup', name: 'Setup', panels: ['probe', 'machining'] },
+  // Coordinates beside probing on purpose: the skew routine writes a rotation
+  // and the only place that rotation is visible is the Coordinates panel.
+  { id: 'setup', name: 'Setup', panels: ['wcs', 'probe'], stacked: { machining: 'probe' } },
   { id: 'advanced', name: 'Advanced', panels: ['om'], stacked: { console: 'om', files: 'om' } },
 ];
 
@@ -101,7 +113,9 @@ export class DashboardHost extends PanelElement {
   private persist(): void {
     for (const [id, { api }] of this.views) {
       const page = this.state.pages.find((p) => p.id === id);
-      if (page) page.layout = api.toJSON();
+      if (!page) continue;
+      page.layout = api.toJSON();
+      page.known = [...new Set([...(page.known ?? []), ...api.panels.map((p) => p.id)])];
     }
     saveSetting('dockLayout', this.state);
     this.requestUpdate();
@@ -164,26 +178,53 @@ export class DashboardHost extends PanelElement {
         api.clear();
       }
     }
-    if (!seeded) this.seed(page, api);
+    if (!seeded) page.layout = null;
+    this.ensureDefaults(page, api);
 
     api.onDidLayoutChange(() => this.persist());
     return api;
   }
 
-  /** Open a page's default panels: left to right, with stacked ones as tabs. */
-  private seed(page: PageState, api: DockviewApi): void {
+  /**
+   * Ensure a page holds its default panels, left to right with stacked ones as
+   * tabs. Idempotent: anything already present, or recorded in `known`, is left
+   * alone, so this can run on every update.
+   *
+   * It has to run repeatedly rather than once at creation for two reasons.
+   *
+   * Capabilities arrive asynchronously. A page shown before the driver has
+   * connected would otherwise seed empty and stay empty for the session, since
+   * `available()` rejects every panel while the capability set is still the
+   * empty default — which is exactly what happens when the app reopens on the
+   * Setup page.
+   *
+   * And a saved layout would otherwise freeze a page at whatever the defaults
+   * were the day it was saved, so a panel added to DEFAULT_PAGES later would
+   * never reach anyone who had used the app before.
+   *
+   * `known` is what stops it fighting the operator: a panel that has ever been
+   * on this page is never re-added, so closing one makes it stay closed.
+   */
+  private ensureDefaults(page: PageState, api: DockviewApi): void {
     const spec = DEFAULT_PAGES.find((p) => p.id === page.id);
     if (!spec) return;
     const caps = capabilities.peek();
+    const known = new Set(page.known ?? api.panels.map((p) => p.id));
     const usable = (id: string) => {
       const def = panelDefinition(id);
       return def && (!def.available || def.available(caps)) ? def : null;
     };
 
+    let added = false;
     let previous: string | null = null;
     for (const id of spec.panels) {
       const def = usable(id);
       if (!def) continue;
+      if (api.getPanel(id)) {
+        previous = id;
+        continue;
+      }
+      if (known.has(id)) continue;
       api.addPanel({
         id,
         component: id,
@@ -193,16 +234,29 @@ export class DashboardHost extends PanelElement {
           : {}),
       });
       previous = id;
+      added = true;
     }
 
     for (const [id, behind] of Object.entries(spec.stacked ?? {})) {
       const def = usable(id);
-      if (!def || !api.getPanel(behind)) continue;
-      api.addPanel({ id, component: id, title: def.title, position: { referencePanel: behind } });
+      if (!def || api.getPanel(id) || known.has(id)) continue;
+      const reference = api.getPanel(behind) ? behind : api.panels[0]?.id;
+      api.addPanel({
+        id,
+        component: id,
+        title: def.title,
+        ...(reference ? { position: { referencePanel: reference } } : {}),
+      });
+      added = true;
     }
-    // Leave the first tab of each stack showing, not the last one added.
+
+    // Leave the first tab of each stack showing, not the last one added — but
+    // only when something was actually added, or this would yank the operator
+    // back to the first tab on every poll.
+    if (!added) return;
     for (const id of spec.panels) api.getPanel(id)?.api.setActive();
     api.getPanel(spec.panels[0])?.api.setActive();
+    this.persist();
   }
 
   /** Create views lazily, and show exactly one. */
@@ -225,6 +279,10 @@ export class DashboardHost extends PanelElement {
 
     for (const [id, v] of this.views) {
       v.host.style.display = id === active.id ? '' : 'none';
+      // Capabilities may have arrived since this view was created; a page that
+      // seeded empty because the driver had not connected yet fills in here.
+      const page = this.state.pages.find((p) => p.id === id);
+      if (page) this.ensureDefaults(page, v.api);
     }
     // A hidden dockview has no size, so it must be told its dimensions when it
     // becomes visible or it renders collapsed.

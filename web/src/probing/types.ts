@@ -120,6 +120,29 @@ export interface ToolLengthParams extends ProbeCommon {
   dustShoeAxis: string | null;
 }
 
+/**
+ * Two-point edge probe that measures how far the stock is rotated, so the
+ * coordinate system can be turned to match instead of the stock being
+ * re-clamped. Touching the same edge twice cancels the tip radius exactly —
+ * both touches are offset by the same amount — so the angle is independent of
+ * tip calibration, which the measured sizes elsewhere in this pack are not.
+ */
+export interface SkewProbeParams extends ProbeCommon {
+  /** Which axis the edge nominally runs along. */
+  edgeAxis: 'X' | 'Y';
+  /** Direction the probe approaches the edge along the perpendicular axis. */
+  approach: 1 | -1;
+  /** Distance between the two touch points, mm. Longer is more accurate. */
+  span: number;
+  /** +1 travels in the positive edge-axis direction between the two touches. */
+  travel: 1 | -1;
+  /** Rotation centre in work coordinates — normally the work origin. */
+  centreX: number;
+  centreY: number;
+  /** Refuse to apply a rotation larger than this, degrees. */
+  maxAngle: number;
+}
+
 export interface BoreProbeParams extends ProbeCommon {
   /** Nominal diameter, used to size the search moves. */
   nominalDiameter: number;

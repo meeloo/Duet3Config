@@ -36,6 +36,11 @@ const axes = [
   { speed: 8000, letter: 'U', babystep: 0, machinePosition: 30, userPosition: 30, workplaceOffsets: [0,0,0,0,0,0,0,0,0], homed: true, min: 0, max: 60, visible: true },
 ];
 
+/** Active work coordinate system, 0 = G54, as move.workplaceNumber reports it. */
+let workplaceNumber = 0;
+/** G68 state. `centre` is machine coordinates, matching the firmware. */
+const rotation = { angle: 0, centre: [0, 0] };
+
 const state = {
   status: 'idle',
   currentTool: 1,
@@ -210,7 +215,7 @@ setInterval(() => {
     axes[2].machinePosition = -20 + Math.sin(t * 2) * 3;
   }
   for (const a of axes) {
-    a.userPosition = a.machinePosition - a.workplaceOffsets[0];
+    a.userPosition = a.machinePosition - a.workplaceOffsets[workplaceNumber];
   }
   if (spindle.state !== 'stopped') {
     // Drift toward the commanded RPM, like a real VFD ramping.
@@ -241,7 +246,8 @@ function buildModel(liveOnly) {
           ? { machinePosition: round(a.machinePosition), userPosition: round(a.userPosition) }
           : { ...a, machinePosition: round(a.machinePosition), userPosition: round(a.userPosition) },
       ),
-      workplaceNumber: 0,
+      workplaceNumber,
+      rotation: { angle: rotation.angle, centre: [...rotation.centre] },
       speedFactor: model_speedFactor,
       currentMove: { requestedSpeed: state.status === 'processing' ? 2400 : 0, topSpeed: 2400 },
     },
@@ -455,13 +461,49 @@ function handleGcode(gcode) {
       job.file = null;
       bumpSeq('state');
       bumpSeq('job');
-    } else if (upper.startsWith('G10 L20')) {
-      // Set work offset so the current position reads the requested value.
-      for (const a of axes) {
-        const m = new RegExp(`${a.letter}(-?[\\d.]+)`).exec(upper);
-        if (m) a.workplaceOffsets[0] = a.machinePosition - Number(m[1]);
+    } else if (upper.startsWith('G10 L20') || upper.startsWith('G10 L2 ')) {
+      // L20 sets the offset so the current position reads the value; L2 writes
+      // the offset itself. P selects the system, 1 = G54, and defaults to the
+      // active one — the real firmware treats P0 as "the current workplace".
+      const byPosition = upper.startsWith('G10 L20');
+      const pm = /\bP(\d+)/.exec(upper);
+      const p = pm && Number(pm[1]) > 0 ? Number(pm[1]) - 1 : workplaceNumber;
+      if (p > 8) {
+        pushReply(`Error: G10: P parameter out of range`);
+      } else {
+        for (const a of axes) {
+          const m = new RegExp(`${a.letter}(-?[\\d.]+)`).exec(upper);
+          if (m) a.workplaceOffsets[p] = byPosition ? a.machinePosition - Number(m[1]) : Number(m[1]);
+        }
+        pushReply('Work offset set');
+        bumpSeq('move');
       }
-      pushReply('Work offset set');
+    } else if (/^G5[4-9](\.[123])?$/.test(upper.trim())) {
+      const m = /^G59\.([123])$/.exec(upper.trim());
+      workplaceNumber = m ? 5 + Number(m[1]) : Number(upper.trim().slice(1)) - 54;
+      bumpSeq('move');
+    } else if (upper.startsWith('G68')) {
+      // R, and one of A/X plus one of B/Y, are all mandatory in RRF.
+      const r = /R(-?[\d.]+)/.exec(upper);
+      const x = /[AX](-?[\d.]+)/.exec(upper);
+      const y = /[BY](-?[\d.]+)/.exec(upper);
+      if (!r || !x || !y) {
+        pushReply('Error: G68: missing parameter');
+      } else {
+        const incremental = /\bI\b/.test(upper);
+        rotation.angle = incremental ? rotation.angle + Number(r[1]) : Number(r[1]);
+        // The firmware stores the centre in machine coordinates: G68 takes work
+        // coordinates and adds the workplace offset before keeping it.
+        rotation.centre = [
+          Number(x[1]) + axes[0].workplaceOffsets[workplaceNumber],
+          Number(y[1]) + axes[1].workplaceOffsets[workplaceNumber],
+        ];
+        pushReply(`Coordinate rotation ${rotation.angle} deg`);
+        bumpSeq('move');
+      }
+    } else if (upper.trim() === 'G69') {
+      rotation.angle = 0;
+      rotation.centre = [0, 0];
       bumpSeq('move');
     } else if (upper.startsWith('G1') || upper.startsWith('G0')) {
       const relative = cmds.some((c) => c.toUpperCase() === 'G91');

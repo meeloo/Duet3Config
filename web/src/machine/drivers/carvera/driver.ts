@@ -36,6 +36,7 @@ export class CarveraDriver implements MachineDriver {
     fileWrite: false,
     macros: false,
     workCoordinateSystems: 6,
+    coordinateRotation: false,
     jobFilePosition: false,
     toolChanger: true,
     prompts: false,
@@ -78,11 +79,20 @@ export class CarveraDriver implements MachineDriver {
   async home(_axes?: string[]): Promise<void> {
     todo('home');
   }
-  async setWorkZero(_axis: string, _value: number): Promise<void> {
+  async setWorkZero(_axis: string, _value: number, _wcs?: number): Promise<void> {
     todo('setWorkZero');
+  }
+  async setWorkOffset(_wcs: number, _axis: string, _machineValue: number): Promise<void> {
+    todo('setWorkOffset');
   }
   async selectWcs(_index: number): Promise<void> {
     todo('selectWcs');
+  }
+  async setRotation(_angle: number, _centreX: number, _centreY: number): Promise<void> {
+    todo('setRotation');
+  }
+  async clearRotation(): Promise<void> {
+    todo('clearRotation');
   }
   async emergencyStop(): Promise<void> {
     todo('emergencyStop');

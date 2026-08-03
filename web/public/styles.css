@@ -325,6 +325,46 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .readout { font-family: var(--mono); font-size: 12px; color: var(--text-dim); margin-left: auto; }
 .readout.warn { color: var(--warn); }
 
+/* ---------- Work coordinate systems ---------- */
+
+.wcs { padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; height: 100%;
+  min-height: 0; }
+/* The table is the only part allowed to scroll: nine rows times however many
+   axes the machine has will not fit every panel size, but the copy row and the
+   rotation controls below it must stay reachable without hunting. */
+.wcs-scroll { overflow: auto; min-height: 0; flex: 1 1 auto; }
+.wcs-table { width: 100%; border-collapse: collapse; }
+.wcs-table th {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-faint); text-align: left; padding: 2px 6px; font-weight: 600;
+  position: sticky; top: 0; background: var(--bg-panel); z-index: 1;
+}
+.wcs-table th.num { text-align: right; }
+.wcs-table td { padding: 2px 4px; }
+.wcs-row.active { background: var(--tint-accent); }
+.wcs-code { width: 62px; }
+.wcs-code button { width: 100%; padding: 4px 2px; }
+.wcs-name input { width: 100%; min-width: 60px; min-height: 26px; padding: 3px 6px;
+  font-size: 12px; }
+.wcs-offset { width: 100%; min-width: 74px; min-height: 26px; padding: 3px 6px;
+  font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right;
+  font-size: 12px; }
+/* Spinners steal width the numbers need, and nobody nudges a fixture offset by
+   one whole millimetre at a time. */
+.wcs-offset::-webkit-inner-spin-button, .wcs-offset::-webkit-outer-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+.wcs-offset { -moz-appearance: textfield; appearance: textfield; }
+.wcs-actions { white-space: nowrap; text-align: right; }
+.wcs-actions button { margin-left: 3px; }
+.wcs-foot { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 12px;
+  color: var(--text-dim); }
+.wcs-foot select { min-height: 28px; padding: 3px 6px; font-size: 12px; }
+.wcs-rotation { display: flex; flex-direction: column; gap: 7px; padding-top: 10px;
+  border-top: 1px solid var(--border); }
+.wcs-rot-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px 14px; }
+
 /* ---------- Jog ---------- */
 
 .jog { padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; height: 100%; }

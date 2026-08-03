@@ -99,6 +99,19 @@ export interface MachinePrompt {
   defaultValue?: string | number;
 }
 
+/**
+ * Rotation of the work coordinate system about a point in the XY plane.
+ *
+ * This is what makes a crooked workpiece usable: probe two points along one
+ * edge, rotate the coordinate system to match, and the CAM output runs square
+ * to the stock without re-fixturing it. `angle` is degrees anticlockwise.
+ */
+export interface Rotation {
+  angle: number;
+  /** Rotation centre in *machine* coordinates. */
+  centre: [number, number];
+}
+
 export interface MachineState {
   status: MachineStatus;
   /** Human-readable controller identity, e.g. "Duet 3 MB6HC / RRF 3.6.0". */
@@ -108,6 +121,8 @@ export interface MachineState {
   wcs: number;
   /** How many work coordinate systems the controller exposes. */
   wcsCount: number;
+  /** Active coordinate rotation, or null when there is none / it is unsupported. */
+  rotation: Rotation | null;
   spindle: Spindle | null;
   job: JobState | null;
   tool: ToolState | null;
@@ -127,6 +142,7 @@ export function emptyMachineState(): MachineState {
     axes: [],
     wcs: 1,
     wcsCount: 1,
+    rotation: null,
     spindle: null,
     job: null,
     tool: null,
@@ -170,6 +186,8 @@ export interface Capabilities {
   macros: boolean;
   /** Number of work coordinate systems (0 = unsupported). */
   workCoordinateSystems: number;
+  /** Can rotate the coordinate system about a point in XY (G68-style). */
+  coordinateRotation: boolean;
   /** Reports byte offset into the running file, enabling live toolpath tracking. */
   jobFilePosition: boolean;
   /** Supports an automatic tool changer workflow. */
@@ -191,6 +209,7 @@ export function defaultCapabilities(): Capabilities {
     fileWrite: false,
     macros: false,
     workCoordinateSystems: 0,
+    coordinateRotation: false,
     jobFilePosition: false,
     toolChanger: false,
     prompts: false,

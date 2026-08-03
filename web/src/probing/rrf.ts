@@ -19,6 +19,7 @@ import type {
   BoreProbeParams,
   CornerProbeParams,
   EdgeProbeParams,
+  SkewProbeParams,
   ToolLengthParams,
   ZProbeParams,
 } from './types.js';
@@ -47,7 +48,7 @@ export function probeZ(p: ZProbeParams): GeneratedProgram {
   g.raw(`G10 L20 P${p.wcs} Z${n(p.plateThickness)}`);
   g.feed({ z: p.safeZ, f: p.feedFast });
   g.raw(`M291 P"Z zeroed on the surface." R"Probe complete" S1`);
-  g.end();
+  g.end('macro');
 
   return {
     name: 'probe-z.g',
@@ -78,7 +79,7 @@ export function probeEdge(p: EdgeProbeParams): GeneratedProgram {
   g.raw(`G1 ${p.axis}${n(-p.direction * p.backoff)} F${n(p.feedFast, 1)}`);
   g.raw('G90');
   g.raw(`M291 P"${p.axis} edge found." R"Probe complete" S1`);
-  g.end();
+  g.end('macro');
 
   return {
     name: `probe-edge-${p.axis.toLowerCase()}.g`,
@@ -155,7 +156,7 @@ export function probeCorner(p: CornerProbeParams): GeneratedProgram {
   g.raw('G90');
   if (p.includeZ) g.feed({ z: p.safeZ, f: p.feedFast });
   g.raw(`M291 P"Corner found. Origin set in G${53 + p.wcs}." R"Probe complete" S1`);
-  g.end();
+  g.end('macro');
 
   return {
     name: 'probe-corner.g',
@@ -208,7 +209,7 @@ export function probeToolLength(p: ToolLengthParams): GeneratedProgram {
   );
   g.raw('echo "Tool offset set to " ^ {var.newOffset}');
   g.raw(`G53 G0 Z${n(p.retractZ)}`);
-  g.end();
+  g.end('macro');
 
   return {
     name: 'probe-tool-length.g',
@@ -217,6 +218,95 @@ export function probeToolLength(p: ToolLengthParams): GeneratedProgram {
     warnings: [
       'Runs in machine coordinates — the machine must be homed.',
       `Searches ${reach.toFixed(1)}mm down from Z${p.retractZ} to reach the setter at Z${p.probeZ}.`,
+    ],
+  };
+}
+
+/**
+ * Skew: touch one edge twice, work out its angle, rotate the coordinate system
+ * onto it with G68.
+ *
+ * The geometry, once, because getting the sign wrong here silently machines the
+ * part crooked. RRF's rotation maps user coordinates to machine coordinates by
+ *
+ *     machine = R(a) · (user − centre) + centre        R = anticlockwise by a
+ *
+ * so the user's +X axis points along machine direction (cos a, sin a) and the
+ * user's +Y along (−sin a, cos a). To put the user axis on the measured edge we
+ * therefore want:
+ *
+ *     X-parallel edge:  a = atan2( Δperp, span)
+ *     Y-parallel edge:  a = atan2(−Δperp, span)
+ *
+ * where Δperp is the second touch minus the first, both in *machine*
+ * coordinates so any rotation already in force cannot contaminate them, and
+ * `span` is positive. Travelling in the negative direction between touches
+ * samples the edge vector backwards, which flips the sign — hence the `travel`
+ * factor folded into k below.
+ */
+export function probeSkew(p: SkewProbeParams): GeneratedProgram {
+  const perpAxis = p.edgeAxis === 'X' ? 'Y' : 'X';
+  const perpIndex = p.edgeAxis === 'X' ? 1 : 0;
+  const span = Math.abs(p.span);
+  const k = (p.edgeAxis === 'X' ? 1 : -1) * p.travel;
+  const sign = k > 0 ? '' : '-';
+
+  const g = new Gcode();
+  g.header('Probe skew', [
+    `probe K${p.probeIndex}, edge along ${p.edgeAxis}, approaching ${p.approach > 0 ? '+' : '-'}${perpAxis}`,
+    `two touches ${span}mm apart, travelling ${p.travel > 0 ? '+' : '-'}${p.edgeAxis}`,
+    `rotates G${53 + p.wcs} about X${p.centreX} Y${p.centreY}`,
+  ]);
+  g.blank();
+  g.comment('Position the probe beside the edge at probing depth, near the first point');
+  g.blank();
+  // Square the machine up before measuring: with a rotation in force the moves
+  // below would run along the rotated axes rather than along the edge, and the
+  // span between touches would not be the span we think it is.
+  g.comment('cancel any rotation so the traverse between touches is square');
+  g.raw('G69');
+
+  g.blank();
+  g.comment('--- first touch ---');
+  twoStage(g, p, perpAxis, p.approach * Math.abs(p.maxTravel));
+  g.raw(`var p1 = move.axes[${perpIndex}].machinePosition`);
+
+  g.blank();
+  g.comment('--- move along the edge and touch again ---');
+  g.raw('G91');
+  g.raw(`G1 ${perpAxis}${n(-p.approach * p.backoff)} F${n(p.feedFast, 1)}`);
+  g.raw(`G1 ${p.edgeAxis}${n(p.travel * span)} F${n(p.feedFast, 1)}`);
+  g.raw('G90');
+  twoStage(g, p, perpAxis, p.approach * Math.abs(p.maxTravel));
+  g.raw(`var p2 = move.axes[${perpIndex}].machinePosition`);
+
+  g.blank();
+  g.raw('G91');
+  g.raw(`G1 ${perpAxis}${n(-p.approach * p.backoff)} F${n(p.feedFast, 1)}`);
+  g.raw('G90');
+
+  g.blank();
+  g.raw(`var skew = {degrees(atan2(${sign}(var.p2 - var.p1), ${n(span)}))}`);
+  g.raw(`echo "Skew " ^ var.skew ^ " deg over ${n(span)}mm"`);
+  // A missed touch reads as a huge angle, and applying it would rotate the
+  // whole coordinate system into the fixture. Refuse rather than apply.
+  g.raw(`if {abs(var.skew) > ${n(p.maxAngle)}}`);
+  g.raw(
+    `  abort "Measured skew " ^ var.skew ^ " deg exceeds the ${n(p.maxAngle)} deg limit - check the probe reached both points"`,
+  );
+  g.raw(`G68 X${n(p.centreX)} Y${n(p.centreY)} R{var.skew}`);
+  g.raw('M291 P{"Coordinate system rotated by " ^ var.skew ^ " deg."} R"Skew applied" S1');
+  g.end('macro');
+
+  return {
+    name: 'probe-skew.g',
+    gcode: g.toString(),
+    summary: `Measure the ${p.edgeAxis} edge over ${span}mm with K${p.probeIndex} and rotate G${53 + p.wcs} to match`,
+    warnings: [
+      'Set the work origin first — the rotation pivots about it, so moving the origin afterwards re-skews the part.',
+      'Z is never moved: position the probe at side-probing depth before running.',
+      `The edge must be reachable at both points, ${span}mm apart along ${p.edgeAxis}.`,
+      'G68 is experimental in RepRapFirmware and applies to the XY plane only.',
     ],
   };
 }
@@ -268,7 +358,7 @@ export function probeBore(p: BoreProbeParams): GeneratedProgram {
     `echo "Measured size X " ^ {abs(var.xPlus - var.xMinus) + ${n(p.tipDiameter)}} ^ " Y " ^ {abs(var.yPlus - var.yMinus) + ${n(p.tipDiameter)}}`,
   );
   g.raw(`M291 P"Centre found and set as origin." R"Probe complete" S1`);
-  g.end();
+  g.end('macro');
 
   return {
     name: p.outside ? 'probe-boss.g' : 'probe-bore.g',

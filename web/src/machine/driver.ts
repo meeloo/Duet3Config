@@ -57,10 +57,28 @@ export interface MachineDriver {
 
   jog(axis: string, opts: JogOptions): Promise<void>;
   home(axes?: string[]): Promise<void>;
-  /** Set the work offset for `axis` so the current position reads `value`. */
-  setWorkZero(axis: string, value: number): Promise<void>;
+  /**
+   * Set the work offset for `axis` so the current position reads `value`.
+   * @param wcs which system to write, 1 = G54. Defaults to the active one.
+   */
+  setWorkZero(axis: string, value: number, wcs?: number): Promise<void>;
+  /**
+   * Write a work offset directly, in machine coordinates: after this, work
+   * position = machine position − `machineValue` for that axis in that system.
+   * Unlike setWorkZero this does not depend on where the machine is standing,
+   * which is what typing a number into an offset table has to mean.
+   */
+  setWorkOffset(wcs: number, axis: string, machineValue: number): Promise<void>;
   /** Select work coordinate system (1 = G54). */
   selectWcs(index: number): Promise<void>;
+  /**
+   * Rotate the coordinate system by `angle` degrees anticlockwise about
+   * (`centreX`, `centreY`) given in *work* coordinates. Only meaningful when
+   * `capabilities.coordinateRotation`.
+   */
+  setRotation(angle: number, centreX: number, centreY: number): Promise<void>;
+  /** Cancel any coordinate rotation. */
+  clearRotation(): Promise<void>;
   emergencyStop(): Promise<void>;
 
   // --- Spindle -----------------------------------------------------------

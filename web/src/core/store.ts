@@ -127,9 +127,14 @@ export const actions = {
   jog: (axis: string, distance: number, feedRate: number) =>
     run(`jog ${axis}`, (d) => d.jog(axis, { distance, feedRate })),
   home: (axes?: string[]) => run('home', (d) => d.home(axes)),
-  setWorkZero: (axis: string, value = 0) =>
-    run(`zero ${axis}`, (d) => d.setWorkZero(axis, value)),
+  setWorkZero: (axis: string, value = 0, wcs?: number) =>
+    run(`zero ${axis}`, (d) => d.setWorkZero(axis, value, wcs)),
+  setWorkOffset: (wcs: number, axis: string, machineValue: number) =>
+    run(`set G${53 + wcs} ${axis} offset`, (d) => d.setWorkOffset(wcs, axis, machineValue)),
   selectWcs: (i: number) => run('select WCS', (d) => d.selectWcs(i)),
+  setRotation: (angle: number, centreX: number, centreY: number) =>
+    run('set rotation', (d) => d.setRotation(angle, centreX, centreY)),
+  clearRotation: () => run('clear rotation', (d) => d.clearRotation()),
   estop: () => run('emergency stop', (d) => d.emergencyStop()),
   setSpindle: (rpm: number, dir: 'forward' | 'reverse') =>
     run('set spindle', (d) => d.setSpindle(rpm, dir)),

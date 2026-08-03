@@ -2,6 +2,7 @@
 // Adding a panel means creating the file and adding one line here.
 
 import './dro.js';
+import './wcs.js';
 import './jog.js';
 import './spindle.js';
 import './job.js';

@@ -20,10 +20,10 @@ import {
   type ProbeMap,
   type ProbeRole,
 } from '../probing/types.js';
-import { probeBore, probeCorner, probeEdge, probeToolLength, probeZ } from '../probing/rrf.js';
+import { probeBore, probeCorner, probeEdge, probeSkew, probeToolLength, probeZ } from '../probing/rrf.js';
 import type { GeneratedProgram } from '../cam/format.js';
 
-type RoutineId = 'toolLength' | 'corner' | 'edge' | 'zsurface' | 'bore';
+type RoutineId = 'toolLength' | 'corner' | 'edge' | 'skew' | 'zsurface' | 'bore';
 
 interface RoutineInfo {
   id: RoutineId;
@@ -36,6 +36,7 @@ const ROUTINES: RoutineInfo[] = [
   { id: 'toolLength', label: 'Tool length', role: 'toolLength', blurb: 'Measure the tool on the fixed setter and set its Z offset.' },
   { id: 'corner', label: 'Corner', role: 'workpiece', blurb: 'Find a stock corner and set the work origin.' },
   { id: 'edge', label: 'Single edge', role: 'workpiece', blurb: 'Touch one face and assign it a coordinate.' },
+  { id: 'skew', label: 'Skew', role: 'workpiece', blurb: 'Touch one edge twice and rotate the coordinate system onto it.' },
   { id: 'zsurface', label: 'Z surface', role: 'workpiece', blurb: 'Zero Z on the top of the stock or a touch plate.' },
   { id: 'bore', label: 'Bore / boss centre', role: 'feature', blurb: 'Find the centre of a hole or round boss.' },
 ];
@@ -65,6 +66,13 @@ export class ProbePanel extends PanelElement {
   private edgeSetTo = 0;
   private nominalDiameter = 20;
   private outsideFeature = false;
+  private skewEdgeAxis: 'X' | 'Y' = 'X';
+  private skewApproach: 1 | -1 = 1;
+  private skewSpan = 80;
+  private skewTravel: 1 | -1 = 1;
+  private skewCentreX = 0;
+  private skewCentreY = 0;
+  private skewMaxAngle = 5;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -140,6 +148,17 @@ export class ProbePanel extends PanelElement {
           axis: this.edgeAxis,
           direction: this.edgeDirection,
           setTo: this.edgeSetTo,
+        });
+      case 'skew':
+        return probeSkew({
+          ...common,
+          edgeAxis: this.skewEdgeAxis,
+          approach: this.skewApproach,
+          span: this.skewSpan,
+          travel: this.skewTravel,
+          centreX: this.skewCentreX,
+          centreY: this.skewCentreY,
+          maxAngle: this.skewMaxAngle,
         });
       case 'zsurface':
         return probeZ({ ...common, plateThickness: this.plateThickness });
@@ -247,6 +266,31 @@ export class ProbePanel extends PanelElement {
           ], (v) => ((this.edgeDirection = Number(v) as 1 | -1), this.requestUpdate()))}
           ${numberField('Set edge to', this.edgeSetTo, (v) => ((this.edgeSetTo = v), this.requestUpdate()), { suffix: 'mm' })}
           ${shared}
+        `;
+      case 'skew':
+        return html`
+          ${selectField('Edge along', this.skewEdgeAxis, [
+            { value: 'X', label: 'X · touch in Y' },
+            { value: 'Y', label: 'Y · touch in X' },
+          ], (v) => ((this.skewEdgeAxis = v), this.requestUpdate()))}
+          ${selectField('Approach', String(this.skewApproach) as '1' | '-1', [
+            { value: '1', label: 'Positive' },
+            { value: '-1', label: 'Negative' },
+          ], (v) => ((this.skewApproach = Number(v) as 1 | -1), this.requestUpdate()))}
+          ${selectField('Travel', String(this.skewTravel) as '1' | '-1', [
+            { value: '1', label: `+${this.skewEdgeAxis}` },
+            { value: '-1', label: `−${this.skewEdgeAxis}` },
+          ], (v) => ((this.skewTravel = Number(v) as 1 | -1), this.requestUpdate()))}
+          ${numberField('Span', this.skewSpan, (v) => ((this.skewSpan = v), this.requestUpdate()), { suffix: 'mm', min: 1, title: 'Distance between the two touch points. Longer is more accurate — angle error falls off as 1/span.' })}
+          ${numberField('Pivot X', this.skewCentreX, (v) => ((this.skewCentreX = v), this.requestUpdate()), { suffix: 'mm', title: 'Rotation centre in work coordinates. Leave at 0,0 to pivot about the work origin.' })}
+          ${numberField('Pivot Y', this.skewCentreY, (v) => ((this.skewCentreY = v), this.requestUpdate()), { suffix: 'mm' })}
+          ${numberField('Abort above', this.skewMaxAngle, (v) => ((this.skewMaxAngle = v), this.requestUpdate()), { suffix: '\u00b0', title: 'A missed touch reads as a huge angle. Above this the macro aborts instead of rotating.' })}
+          ${shared}
+          <div class="param-note">
+            Tip diameter does not affect the result — both touches are offset by the same radius,
+            so it cancels. This is the one routine in the pack that does not depend on tip
+            calibration.
+          </div>
         `;
       case 'zsurface':
         return html`

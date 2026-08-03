@@ -96,8 +96,20 @@ export class Gcode {
     return this.raw(`G4 S${n(seconds, 1)}`);
   }
 
-  end(): this {
-    this.raw('M30');
+  /**
+   * End of program.
+   *
+   * Deliberately NOT M30. Most CNC posts end a file with it, but in
+   * RepRapFirmware M30 is *delete file* and takes a filename — a bare M30
+   * throws "expected a non-empty string" and every generated file would finish
+   * on an error. M2 is what RRF treats as end-of-job (GCodes2.cpp handles M0,
+   * M1 and M2 together, calling StopPrint when the command came from a file).
+   *
+   * A macro invoked with M98 must emit neither: it ends by running out of
+   * lines, and an M2 inside it would stop the job that called it.
+   */
+  end(kind: 'program' | 'macro' = 'program'): this {
+    if (kind === 'program') this.raw('M2');
     return this;
   }
 

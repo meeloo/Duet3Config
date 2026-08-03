@@ -16,6 +16,10 @@
 // produced is already aligned.
 
 import { Gcode, n } from '../cam/format.js';
+// G54–G59 then G59.1–G59.3 — NOT G53+n, which runs off the end into G60.
+import { wcsCode } from '../wcs/names.js';
+
+export { wcsCode };
 
 export interface ModalState {
   /** 'mm' or 'inch' — G21 / G20. */
@@ -247,9 +251,4 @@ export function buildResumePreamble(state: ModalState, opts: ResumeOptions): str
   g.blank();
   g.comment('the job resumes from here');
   return g.toString();
-}
-
-/** G54–G59 then G59.1–G59.3 — NOT G53+n, which runs off the end into G60. */
-export function wcsCode(wcs: number): string {
-  return wcs <= 6 ? `G${53 + wcs}` : `G59.${wcs - 6}`;
 }
