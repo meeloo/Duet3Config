@@ -9,14 +9,65 @@
 // which is how DWC's own bundles are shipped. Serving the gzipped copy matters
 // because the board reads it off the SD card single-threaded.
 
-import * as esbuild from 'esbuild';
 import { gzipSync } from 'node:zlib';
-import { mkdirSync, readFileSync, writeFileSync, cpSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, readFileSync, writeFileSync, cpSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const watch = process.argv.includes('--watch') || process.argv.includes('--serve');
 const serve = process.argv.includes('--serve');
 const prod = !watch;
+
+// Everything is relative to this file, not to wherever the build was invoked
+// from, so `node web/build.mjs` from the repo root behaves the same as
+// `npm run build` inside web/.
+const root = dirname(fileURLToPath(import.meta.url));
+process.chdir(root);
+
+const require = createRequire(import.meta.url);
+
+/**
+ * Locate a file inside an installed dependency.
+ *
+ * Resolved through the package's own entry rather than by assuming
+ * `node_modules/<name>/...`, which breaks under pnpm, workspaces, and hoisting.
+ * A missing dependency reports what to do instead of an ENOENT stack trace —
+ * `git pull` brings in a new dependency but does not install it, and that is
+ * exactly when this fires.
+ */
+function depFile(pkg, relative) {
+  let base;
+  try {
+    base = dirname(require.resolve(`${pkg}/package.json`));
+  } catch {
+    fail(`dependency "${pkg}" is not installed`);
+  }
+  const path = join(base, relative);
+  if (!existsSync(path)) {
+    fail(`"${pkg}" is installed but ${relative} is missing (unexpected version?)`);
+  }
+  return path;
+}
+
+function fail(message) {
+  console.error(`\n[build] ${message}`);
+  console.error(`[build] run \`npm install\` in ${root} and try again\n`);
+  process.exit(1);
+}
+
+if (!existsSync(resolve(root, 'node_modules'))) {
+  fail('node_modules is missing');
+}
+
+// Imported dynamically so a missing install is reported by fail() above rather
+// than as an ERR_MODULE_NOT_FOUND stack trace before any of it runs.
+let esbuild;
+try {
+  esbuild = await import('esbuild');
+} catch {
+  fail('dependency "esbuild" is not installed');
+}
 
 mkdirSync('dist', { recursive: true });
 
@@ -25,7 +76,7 @@ function emitStatic() {
   cpSync('public', 'dist', { recursive: true });
   // dockview ships its own stylesheet; serve it beside ours rather than
   // inlining it, so it caches separately and stays easy to diff on upgrade.
-  cpSync('node_modules/dockview-core/dist/styles/dockview.css', 'dist/dockview.css');
+  cpSync(depFile('dockview-core', 'dist/styles/dockview.css'), 'dist/dockview.css');
 }
 
 /** Write .gz siblings for anything the Duet will serve compressed. */
@@ -49,6 +100,9 @@ const options = {
   // it must exist as its own file rather than being inlined into the bundle.
   entryPoints: { cnc: 'src/main.ts', 'parse-worker': 'src/viewer/parse-worker.ts' },
   outdir: 'dist',
+  // esbuild captures process.cwd() when its module is loaded, which is before
+  // the chdir above — so the paths in this object need the root spelled out.
+  absWorkingDir: root,
   bundle: true,
   format: 'esm',
   target: ['es2022'],
