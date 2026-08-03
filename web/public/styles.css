@@ -819,6 +819,42 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
   border-bottom: 1px solid var(--border); }
 .tool-edit .param.wide { grid-column: 1 / -1; }
 .tool-edit .param-input input[type="text"] { width: 100%; font-family: var(--sans); }
+.tool-geom-head { grid-column: 1 / -1; margin-top: 6px; font-size: 10px;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
+  font-weight: 600; }
+
+/* The file input itself is hidden; the label is the button. */
+.tool-import { position: relative; overflow: hidden; cursor: pointer;
+  text-transform: none; letter-spacing: 0; font-weight: 400; }
+.tool-import input[type="file"] { position: absolute; inset: 0; opacity: 0;
+  width: 100%; cursor: pointer; }
+.tool-import span { display: inline-block; padding: 3px 8px; font-size: 11px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius);
+  color: var(--text-dim); background: var(--bg-raised); }
+.tool-import:hover span { border-color: var(--accent); color: var(--text); }
+
+.modal.wide { max-width: 640px; }
+/* Not .modal-message — that is pre-wrap, for machine text that must keep its
+   own line breaks, and prose written across source lines comes out shredded. */
+.import-intro { color: var(--text-dim); margin: 0 0 14px; line-height: 1.5; font-size: 13px; }
+.import-renumber { display: flex; align-items: center; gap: 6px; margin-bottom: 10px;
+  font-size: 12px; color: var(--text-dim); cursor: pointer; }
+.import-rows { display: flex; flex-direction: column; gap: 2px;
+  max-height: 46vh; overflow: auto; margin-bottom: 12px; }
+.import-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px;
+  border-radius: var(--radius); cursor: pointer; }
+.import-row:hover { background: var(--bg-raised); }
+.import-row.off { opacity: 0.45; }
+.import-number { font-family: var(--mono); font-weight: 700; font-size: 13px;
+  min-width: 30px; }
+.import-detail { display: flex; flex-direction: column; min-width: 0; }
+.import-detail strong { font-size: 13px; font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-detail em { font-size: 11px; font-style: normal; color: var(--text-faint); }
+.import-replaces { margin-left: 8px; color: var(--warn); }
+.import-skipped { font-size: 11px; color: var(--text-faint); margin-bottom: 12px; }
+.import-skipped summary { cursor: pointer; }
+.import-skipped div { padding: 2px 0 0 14px; }
 
 /* ---------- Job ---------- */
 

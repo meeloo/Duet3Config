@@ -32,6 +32,7 @@ export const SYNCED_KEYS = [
   'wcsNames',
   'toolTable',
   'viewerProjection',
+  'viewerShowTool',
   'theme',
 ] as const;
 
@@ -120,9 +121,11 @@ export function describeKey(key: string): string {
     case 'wcsNames':
       return 'work coordinate system names';
     case 'toolTable':
-      return 'tool names and sizes';
+      return 'tool names, sizes and shapes';
     case 'viewerProjection':
       return '3D view projection';
+    case 'viewerShowTool':
+      return 'drawing the cutter in the 3D view';
     case 'theme':
       return 'light / dark theme';
     default:

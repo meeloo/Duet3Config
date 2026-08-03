@@ -47,6 +47,9 @@ export interface ViewerPalette {
   bounds: [number, number, number];
   grid: [number, number, number];
   cutter: [number, number, number];
+  /** The cutter's own body: cutting edges, then the shank above them. */
+  tool: [number, number, number];
+  toolShank: [number, number, number];
   /** Chosen run-from-line point. */
   resume: [number, number, number];
   axisX: [number, number, number];
@@ -70,6 +73,8 @@ const LIGHT: ViewerPalette = {
   bounds: rgb(0xc2cad4),
   grid: rgb(0xdde3ea),
   cutter: rgb(0xe65100),
+  tool: rgb(0x455a64),
+  toolShank: rgb(0x90a4ae),
   resume: rgb(0x7b1fa2),
   axisX: rgb(0xc62828),
   axisY: rgb(0x2e7d32),
@@ -86,6 +91,8 @@ const DARK: ViewerPalette = {
   bounds: rgb(0x39414d),
   grid: rgb(0x252b34),
   cutter: rgb(0xffbe2e),
+  tool: rgb(0xcfd8dc),
+  toolShank: rgb(0x78868c),
   resume: rgb(0xce93d8),
   axisX: rgb(0xd94a3d),
   axisY: rgb(0x59bf6a),

@@ -12,12 +12,15 @@ import { BUSY_STATES } from '../machine/types.js';
 import {
   TOOL_TYPES,
   describeTool,
+  emptyGeometry,
   getTool,
   loadTools,
   saveTools,
+  type ToolGeometry,
   type ToolInfo,
   type ToolType,
 } from '../tools/table.js';
+import { readToolLibrary, type ToolLibrary } from '../tools/fusion.js';
 
 const RPM_PRESETS = [6000, 9000, 12000, 15000, 18000, 24000];
 
@@ -25,6 +28,16 @@ export class SpindlePanel extends PanelElement {
   private rpm = 12000;
   private tools = loadTools();
   private editing: number | null = null;
+
+  // --- Library import -----------------------------------------------------
+  /** Parsed but not yet applied; the operator sees it before the table moves. */
+  private library: ToolLibrary | null = null;
+  /** Rows the operator has unticked in the preview, by position in the list. */
+  private excluded = new Set<number>();
+  /** Assign 1…N in library order, for libraries that number nothing. */
+  private renumber = false;
+  private importError: string | null = null;
+  private importBusy = false;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -55,6 +68,69 @@ export class SpindlePanel extends PanelElement {
     const next = { ...getTool(this.tools, number), ...patch, number };
     this.tools = { ...this.tools, [number]: next };
     saveTools(this.tools);
+    this.requestUpdate();
+  }
+
+  private updateGeometry(number: number, patch: Partial<ToolGeometry>): void {
+    const current = getTool(this.tools, number).geometry ?? emptyGeometry();
+    this.updateTool(number, { geometry: { ...current, ...patch } });
+  }
+
+  // --- Library import -----------------------------------------------------
+
+  private async loadLibrary(file: File): Promise<void> {
+    this.importBusy = true;
+    this.importError = null;
+    this.library = null;
+    this.requestUpdate();
+    try {
+      const library = await readToolLibrary(new Uint8Array(await file.arrayBuffer()));
+      if (!library.tools.length) {
+        throw new Error(
+          library.skipped.length
+            ? 'that library holds no numbered cutting tools'
+            : 'that library is empty',
+        );
+      }
+      this.library = library;
+      this.excluded = new Set();
+      // A library that numbers nothing is useless as-is, so the offer to number
+      // it starts accepted; one that numbers properly is never touched.
+      this.renumber = library.duplicateNumbers.length > 0;
+    } catch (err) {
+      this.importError = (err as Error).message;
+    } finally {
+      this.importBusy = false;
+      this.requestUpdate();
+    }
+  }
+
+  /**
+   * The number a preview row will land on.
+   *
+   * Position in the full list, not in the ticked subset — unticking the third
+   * of ten tools must not silently shift the other seven onto different slots
+   * than the ones the preview showed.
+   */
+  private importNumber(index: number): number {
+    const tool = this.library!.tools[index];
+    return this.renumber ? index + 1 : tool.info.number;
+  }
+
+  private applyLibrary(): void {
+    const library = this.library;
+    if (!library) return;
+    // Merge rather than replace: a library covers the tools it covers, and a
+    // slot the operator filled in by hand is not evidence of anything wrong.
+    const next = { ...this.tools };
+    library.tools.forEach((tool, index) => {
+      if (this.excluded.has(index)) return;
+      const number = this.importNumber(index);
+      next[number] = { ...tool.info, number };
+    });
+    this.tools = next;
+    saveTools(this.tools);
+    this.library = null;
     this.requestUpdate();
   }
 
@@ -234,9 +310,155 @@ export class SpindlePanel extends PanelElement {
                     @change=${(e: Event) => this.updateTool(n, { notes: (e.target as HTMLInputElement).value })} />
                 </span>
               </label>
+              ${this.renderGeometry(n, info)}
             </div>
           `
         : nothing}
+    `;
+  }
+
+  /**
+   * The dimensions the 3D view draws from.
+   *
+   * Every one of them is optional and blank means "work it out" — the viewer
+   * guesses a plausible shank and length from the diameter alone. Filling them
+   * in is only worth doing for the tools whose reach you actually need to
+   * judge, which on most machines is the long ones and the big ones.
+   */
+  private renderGeometry(n: number, info: ToolInfo): TemplateResult {
+    const g = info.geometry ?? emptyGeometry();
+    const dim = (
+      label: string,
+      value: number,
+      unit: string,
+      apply: (v: number) => void,
+      step = 0.1,
+    ) => html`
+      <label class="param">
+        <span class="param-label">${label}</span>
+        <span class="param-input">
+          <input type="number" step=${step} min="0" placeholder="auto"
+            .value=${value > 0 ? String(value) : ''}
+            @change=${(e: Event) => apply(Number((e.target as HTMLInputElement).value) || 0)} />
+          <em>${unit}</em>
+        </span>
+      </label>
+    `;
+
+    return html`
+      <div class="tool-geom-head">Geometry — for the 3D view</div>
+      ${dim('Shank ⌀', g.shank, 'mm', (v) => this.updateGeometry(n, { shank: v }))}
+      ${dim('Flute length', g.flute, 'mm', (v) => this.updateGeometry(n, { flute: v }))}
+      ${dim('Overall length', g.length, 'mm', (v) => this.updateGeometry(n, { length: v }))}
+      ${dim('Corner radius', g.cornerRadius, 'mm', (v) => this.updateGeometry(n, { cornerRadius: v }))}
+      ${dim('Tip angle', g.tipAngle, '°', (v) => this.updateGeometry(n, { tipAngle: v }), 1)}
+    `;
+  }
+
+  // --- Library import UI --------------------------------------------------
+
+  private renderImportButton(): TemplateResult {
+    return html`
+      <label class="tool-import" title="Fusion 360 → Manage → Tool Library → right-click → Export">
+        <input
+          type="file"
+          accept=".tools,.json,application/json"
+          @change=${(e: Event) => {
+            const input = e.target as HTMLInputElement;
+            const file = input.files?.[0];
+            // Clear it, so choosing the same file twice still fires a change.
+            input.value = '';
+            if (file) void this.loadLibrary(file);
+          }}
+        />
+        <span>${this.importBusy ? 'Reading…' : 'Import library…'}</span>
+      </label>
+    `;
+  }
+
+  private renderPreview(): TemplateResult | typeof nothing {
+    const library = this.library;
+    if (!library) return nothing;
+
+    const chosen = library.tools.filter((_, index) => !this.excluded.has(index));
+
+    return html`
+      <div class="modal-backdrop">
+        <div class="modal wide" role="dialog" aria-modal="true">
+          <h2>Import ${library.tools.length} tool${library.tools.length === 1 ? '' : 's'}</h2>
+          <p class="import-intro">
+            Tool numbers come from the library's post-processor settings, so they match what
+            Fusion posts. Tools not listed here are left alone.
+          </p>
+
+          ${library.duplicateNumbers.length
+            ? html`
+                <label class="import-renumber">
+                  <input
+                    type="checkbox"
+                    .checked=${this.renumber}
+                    @change=${(e: Event) => {
+                      this.renumber = (e.target as HTMLInputElement).checked;
+                      this.requestUpdate();
+                    }}
+                  />
+                  <span>Number them 1–${library.tools.length} in library order</span>
+                </label>
+              `
+            : nothing}
+
+          <div class="import-rows">
+            ${library.tools.map((tool, index) => {
+              const number = this.importNumber(index);
+              const info = tool.info;
+              const existing = this.tools[number];
+              const on = !this.excluded.has(index);
+              return html`
+                <label class="import-row ${on ? '' : 'off'}">
+                  <input
+                    type="checkbox"
+                    .checked=${on}
+                    @change=${(e: Event) => {
+                      if ((e.target as HTMLInputElement).checked) this.excluded.delete(index);
+                      else this.excluded.add(index);
+                      this.requestUpdate();
+                    }}
+                  />
+                  <span class="import-number">T${number}</span>
+                  <span class="import-detail">
+                    <strong>${describeTool(info, null)}</strong>
+                    <em>
+                      ${tool.sourceType}${tool.note ? ` · ${tool.note}` : ''}
+                      ${existing
+                        ? html`<span class="import-replaces"
+                            >replaces ${describeTool(existing, null)}</span
+                          >`
+                        : nothing}
+                    </em>
+                  </span>
+                </label>
+              `;
+            })}
+          </div>
+
+          ${library.warnings.map((w) => html`<div class="warn-banner">${w}</div>`)}
+          ${library.skipped.length
+            ? html`<details class="import-skipped">
+                <summary>${library.skipped.length} entr${library.skipped.length === 1 ? 'y' : 'ies'} skipped</summary>
+                ${library.skipped.map((s) => html`<div>${s}</div>`)}
+              </details>`
+            : nothing}
+
+          <div class="modal-buttons">
+            <button class="ghost" @click=${() => ((this.library = null), this.requestUpdate())}>
+              Cancel
+            </button>
+            <button class="primary" ?disabled=${!chosen.length} @click=${() => this.applyLibrary()}>
+              Import ${chosen.length}
+            </button>
+          </div>
+        </div>
+      </div>
     `;
   }
 
@@ -252,18 +474,21 @@ export class SpindlePanel extends PanelElement {
     return html`
       <div class="spindle-panel">
         ${this.renderActiveTool()} ${this.renderSpindle()}
+        ${this.importError ? html`<div class="warn-banner">${this.importError}</div>` : nothing}
         ${caps.toolChanger && slots > 0
           ? html`
               <div class="tool-list">
                 <div class="tool-list-head">
                   <span>Tool changer</span>
                   <em>${slots} slots · tap a row to edit</em>
+                  ${this.renderImportButton()}
                 </div>
                 ${Array.from({ length: slots }, (_, i) => this.renderToolRow(i + 1, false))}
                 ${extraManual.map((n) => this.renderToolRow(n, true))}
               </div>
             `
           : nothing}
+        ${this.renderPreview()}
       </div>
     `;
   }

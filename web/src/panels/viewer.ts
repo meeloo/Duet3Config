@@ -28,6 +28,8 @@ import {
   type ProgramCursor,
 } from '../viewer/cursor.js';
 import { formatDuration } from '../core/util.js';
+import { toolShape, type ToolShape } from '../tools/shape.js';
+import { getTool, loadTools } from '../tools/table.js';
 
 const cache = new Map<string, ParsedToolpath>();
 /** Refuse to pull anything past this over the controller's HTTP server. */
@@ -47,6 +49,11 @@ export class ViewerPanel extends PanelElement {
   private showRapids = true;
   private followJob = true;
   private showEnvelope = true;
+  private showTool = loadSetting<boolean>('viewerShowTool', true);
+  /** Built from the tool table; rebuilt only when the tool actually changes. */
+  private toolShape: ToolShape | null = null;
+  private toolShapeKey = '';
+  private toolsStale = true;
   private projection: Projection = loadSetting<Projection>('viewerProjection', 'perspective');
   /** One-shot: frame the bed once, don't fight the user's camera afterwards. */
   private framedEnvelope = false;
@@ -101,6 +108,10 @@ export class ViewerPanel extends PanelElement {
     // the viewer, so re-bind if it changed.
     const canvas = this.querySelector('canvas');
     if (canvas && canvas !== this.canvas) this.setupCanvas();
+    // The tool table is localStorage, with no signal behind it, and the draw
+    // loop runs at 60fps — so it is re-read here instead, at the machine
+    // signal's rate. An edit in the Spindle panel shows up within a poll.
+    this.toolsStale = true;
   }
 
   private setupCanvas(): void {
@@ -294,8 +305,37 @@ export class ViewerPanel extends PanelElement {
       cutter,
       this.path ? { min: this.path.min, max: this.path.max } : null,
       this.showEnvelope ? this.machineEnvelope() : null,
+      this.activeToolShape(),
     );
     r.render();
+  }
+
+  /**
+   * The cutter currently in the spindle, as a wireframe.
+   *
+   * Only ever the *active* tool. A program's tool changes are not simulated —
+   * the cursor knows where the cutter is, not what it is — and drawing a
+   * confidently wrong cutter is worse than drawing none, because clearance is
+   * exactly what an operator would be using it to judge.
+   */
+  private activeToolShape(): ToolShape | null {
+    if (!this.showTool) return null;
+    const number = machine.peek().tool?.number ?? null;
+    if (number == null) {
+      this.toolShapeKey = '';
+      return (this.toolShape = null);
+    }
+
+    if (this.toolsStale || !this.toolShapeKey.startsWith(`${number}|`)) {
+      this.toolsStale = false;
+      const info = getTool(loadTools(), number);
+      const key = `${number}|${info.diameter}|${info.type}|${JSON.stringify(info.geometry ?? null)}`;
+      if (key !== this.toolShapeKey) {
+        this.toolShapeKey = key;
+        this.toolShape = toolShape(info);
+      }
+    }
+    return this.toolShape;
   }
 
   // --- Program cursor -----------------------------------------------------
@@ -648,6 +688,17 @@ export class ViewerPanel extends PanelElement {
               }}
             />
             Envelope
+          </label>
+          <label class="check" title="Draw the cutter in the spindle at its tip">
+            <input
+              type="checkbox"
+              .checked=${this.showTool}
+              @change=${(e: Event) => {
+                this.showTool = (e.target as HTMLInputElement).checked;
+                saveSetting('viewerShowTool', this.showTool);
+              }}
+            />
+            Tool
           </label>
           ${caps.jobFilePosition
             ? html`

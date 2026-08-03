@@ -11,6 +11,7 @@
 import { lookAt, multiply, ortho, perspective, type Mat4 } from './mat4.js';
 import type { ParsedToolpath } from './parse.js';
 import { viewerPalette, type ViewerPalette } from '../core/theme.js';
+import type { ToolShape } from '../tools/shape.js';
 
 /** An axis-aligned box in work coordinates. */
 export interface Box {
@@ -256,11 +257,15 @@ export class ToolpathRenderer {
    * Everything here is in WORK coordinates. The envelope arrives already
    * converted by the caller, because the axis limits the controller reports are
    * in machine coordinates and the toolpath is not.
+   *
+   * `tool` arrives tip-at-the-origin and is placed at the cutter, which is what
+   * makes it follow a scrubbed cursor as readily as the live spindle.
    */
   setOverlay(
     cutter: [number, number, number] | null,
     bounds: Box | null,
     envelope: Box | null = null,
+    tool: ToolShape | null = null,
   ): void {
     const pos: number[] = [];
     const col: number[] = [];
@@ -331,7 +336,18 @@ export class ToolpathRenderer {
       const s = axisLen * 0.6;
       seg([x - s, y, z], [x + s, y, z], p.cutter);
       seg([x, y - s, z], [x, y + s, z], p.cutter);
-      seg([x, y, z], [x, y, z + s * 2], p.cutter);
+      // With the tool drawn, the vertical whisker would run up inside it and be
+      // the only thing visible when zoomed in close. The cross alone still
+      // marks the tip, which is all it was ever for.
+      if (!tool) seg([x, y, z], [x, y, z + s * 2], p.cutter);
+
+      if (tool) {
+        const v = tool.vertices;
+        for (let i = 0; i < v.length; i += 3) {
+          pos.push(v[i] + x, v[i + 1] + y, v[i + 2] + z);
+          col.push(...(tool.kinds[i / 3] ? p.toolShank : p.tool));
+        }
+      }
     }
 
     if (this.resumeMarker) {

@@ -33,6 +33,29 @@ export const TOOL_TYPES: Array<{ value: ToolType; label: string }> = [
   { value: 'other', label: 'Other' },
 ];
 
+/**
+ * Enough shape to draw the cutter, all in mm.
+ *
+ * Optional as a whole and field-by-field zero-means-unknown, because almost
+ * every tool in a real table was typed in by hand from the packaging and has
+ * nothing but a diameter. A drawing that needs a shank diameter can guess one;
+ * it must not require the operator to measure one.
+ */
+export interface ToolGeometry {
+  /** Shank diameter. 0 = assume the cutting diameter. */
+  shank: number;
+  /** Length of cut, tip to the top of the flutes. 0 = unknown. */
+  flute: number;
+  /** Overall length, tip to where the holder grips it. 0 = unknown. */
+  length: number;
+  /** Corner radius. Half the diameter means a ball nose. */
+  cornerRadius: number;
+  /** Included tip angle for V-bits, chamfers and drills. 0 = none. */
+  tipAngle: number;
+  /** Flat left on the point of a truncated V-bit. 0 = comes to a point. */
+  tipDiameter: number;
+}
+
 export interface ToolInfo {
   number: number;
   name: string;
@@ -41,10 +64,16 @@ export interface ToolInfo {
   type: ToolType;
   flutes: number;
   notes: string;
+  /** Absent on every tool entered before the 3D view wanted a shape. */
+  geometry?: ToolGeometry;
 }
 
 export function emptyTool(number: number): ToolInfo {
   return { number, name: '', diameter: 0, type: 'endmill', flutes: 2, notes: '' };
+}
+
+export function emptyGeometry(): ToolGeometry {
+  return { shank: 0, flute: 0, length: 0, cornerRadius: 0, tipAngle: 0, tipDiameter: 0 };
 }
 
 type Table = Record<number, ToolInfo>;
