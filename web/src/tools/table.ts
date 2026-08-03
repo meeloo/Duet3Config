@@ -83,18 +83,23 @@ export function getTool(table: Table, number: number): ToolInfo {
 }
 
 /**
- * A diameter, to two decimal places at most, with nothing added and nothing
- * dropped: 8 stays "8", 28.5 stays "28.5", and 0.584 becomes "0.58".
+ * A diameter, to three decimal places at most, with nothing added and nothing
+ * dropped: 8 stays "8", 28.5 stays "28.5", 0.584 stays "0.584".
  *
- * Rounded rather than cut. The `* (1 + EPSILON)` is what makes an imperial
- * cutter read correctly: 1/8" is 3.175, but the nearest double is a hair below
- * it, so `toFixed(2)` reports 3.17 — arithmetically defensible and, on a tool
- * label, simply wrong. Nudging by one ulp before rounding puts the tie back on
- * the side the number was written on.
+ * Three rather than two because of the imperial cutters. An eighth of an inch
+ * is 3.175mm exactly, and two decimals turns that into 3.18 — a rounding of a
+ * number that was not approximate to begin with, on the one label an operator
+ * uses to tell two similar cutters apart.
+ *
+ * Rounded rather than cut, and the `* (1 + EPSILON)` is what makes that true at
+ * a tie. A sixteenth is 1.5875mm, but the nearest double is a hair below it, so
+ * `toFixed(3)` reports 1.587. Arithmetically defensible; wrong on a tool row.
+ * Nudging by one ulp first puts the tie back on the side the number was
+ * written on.
  */
 export function formatDiameter(mm: number): string {
   if (!isFinite(mm)) return '0';
-  const rounded = Math.round(Math.abs(mm) * 100 * (1 + Number.EPSILON)) / 100;
+  const rounded = Math.round(Math.abs(mm) * 1000 * (1 + Number.EPSILON)) / 1000;
   return String(mm < 0 ? -rounded : rounded);
 }
 
