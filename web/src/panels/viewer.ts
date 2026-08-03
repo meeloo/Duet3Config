@@ -766,6 +766,13 @@ export class ViewerPanel extends PanelElement {
                 </label>
               `
             : nothing}
+          ${this.renderer?.backend === 'webgl'
+            ? html`<span
+                class="pill dim"
+                title="Drawing with WebGL 1 — this browser has no WebGL 2. Same picture, older pipeline."
+                >GL1</span
+              >`
+            : nothing}
           <span class="viewer-file" title=${this.loadedFrom ?? ''}>
             ${this.loadedFrom ? basename(this.loadedFrom) : 'no file'}
           </span>

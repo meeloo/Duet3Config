@@ -5,6 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <title>CNC</title>
+
+    <!--
+      Full screen, no address bar.
+
+      There is no way for a page to hide Safari's chrome while it is a page —
+      the only route on iOS is Share > Add to Home Screen, after which this meta
+      makes it launch standalone. It is the old Apple-specific tag rather than
+      the manifest because an iPad on iOS 12 predates manifest support; the
+      manifest below does the same job for Chrome and for desktop installs.
+    -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="CNC" />
+    <!-- The status bar sits over the page, which the top bar already accounts
+         for via viewport-fit=cover and the safe-area insets in the stylesheet. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" href="icon-180.png" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#12151a" />
     <link rel="stylesheet" href="dockview.css" />
     <link rel="stylesheet" href="styles.css" />
     <link

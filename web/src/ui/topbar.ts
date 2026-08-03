@@ -16,7 +16,9 @@ import {
   controllerUrl,
   disconnect,
   driverId,
+  loadSetting,
   machine,
+  saveSetting,
 } from '../core/store.js';
 import { DRIVERS, driverInfo } from '../machine/registry.js';
 import {
@@ -51,6 +53,7 @@ export class TopBar extends PanelElement {
   private remote: RemoteState | null = null;
   private syncBusy = false;
   private syncNote: string | null = null;
+  private hintDismissed = loadSetting<boolean>('homeScreenHintDismissed', false);
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -323,6 +326,34 @@ export class TopBar extends PanelElement {
 
       ${this.showSettings ? this.renderPreferences() : nothing}
       ${err ? html`<div class="conn-error">${err}</div>` : nothing}
+      ${this.renderHomeScreenHint()}
+    `;
+  }
+
+  /**
+   * How to get rid of the address bar, on the one platform where the page
+   * cannot do it itself.
+   *
+   * Safari gives a page no way to hide its own chrome; the only route is Share
+   * → Add to Home Screen, after which the app launches standalone. That is not
+   * something anyone guesses, so it is said once, and then never again.
+   */
+  private renderHomeScreenHint(): TemplateResult | typeof nothing {
+    if (this.hintDismissed || !isIosBrowser() || isStandalone()) return nothing;
+    return html`
+      <div class="install-hint">
+        <span>Add to Home Screen (Share ⬆) to run full screen, without the address bar.</span>
+        <button
+          class="tiny ghost"
+          @click=${() => {
+            saveSetting('homeScreenHintDismissed', true);
+            this.hintDismissed = true;
+            this.requestUpdate();
+          }}
+        >
+          Dismiss
+        </button>
+      </div>
     `;
   }
 
@@ -387,3 +418,24 @@ export class TopBar extends PanelElement {
 }
 
 customElements.define('cnc-topbar', TopBar);
+
+/** Safari on an iPhone or iPad, including the desktop-class iPad user agent. */
+function isIosBrowser(): boolean {
+  const ua = navigator.userAgent;
+  const iosDevice = /iPad|iPhone|iPod/.test(ua);
+  // iPadOS 13+ claims to be a Mac; a Mac with a touchscreen is the giveaway.
+  const iPadAsMac = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+  // Every browser on iOS is Safari underneath, so Chrome and Firefox there
+  // have the same limitation and the same fix.
+  return iosDevice || iPadAsMac;
+}
+
+/** Already launched from the home screen? */
+function isStandalone(): boolean {
+  // navigator.standalone is the iOS-specific flag and the only one that works
+  // on iOS 12; the media query is for everything else.
+  const legacy = (navigator as unknown as { standalone?: boolean }).standalone === true;
+  const modern =
+    typeof matchMedia === 'function' && matchMedia('(display-mode: standalone)').matches;
+  return legacy || modern;
+}

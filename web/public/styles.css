@@ -90,7 +90,12 @@ html, body {
 /* 100vh first: dvh is Safari 15.4, and an unknown unit drops the declaration
    entirely — leaving #app with no height, the dock with nothing to fill, and a
    blank page. The fallback has to come first so newer engines override it. */
-#app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+/* env() resolves to 0 in an ordinary browser tab, so the insets cost nothing
+   there and keep the app clear of rounded corners and the home indicator when
+   it is launched from the home screen. Safari 11.1+. */
+#app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden;
+  padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px); }
 cnc-dashboard { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
 button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
@@ -143,7 +148,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 8px 5px 4px;
+  /* Launched from the home screen the status bar sits *over* the page — that
+     is what black-translucent asks for — so the bar drops below the clock. */
+  padding: calc(5px + env(safe-area-inset-top, 0px)) 8px 5px 4px;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
   position: sticky;
@@ -1015,3 +1022,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .cam-mode input[type="range"] { width: 80px; }
 .cam-stale { position: relative; z-index: 1; padding: 6px 12px; border-radius: var(--radius);
   background: var(--tint-bad); color: var(--bad-text); font-size: 12px; }
+
+.install-hint { display: flex; align-items: center; gap: 10px; padding: 6px 14px;
+  background: var(--tint-accent); border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--text-dim); }
+.install-hint span { flex: 1; min-width: 0; }
