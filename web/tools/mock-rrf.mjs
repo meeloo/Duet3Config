@@ -28,11 +28,12 @@ const seqs = {
   state: 1, tools: 1, volumes: 1,
 };
 
+// babystep is what the dry-run Z lift rides on.
 const axes = [
-  { speed: 6000, letter: 'X', machinePosition: 260, userPosition: 260, workplaceOffsets: [0,0,0,0,0,0,0,0,0], homed: true, min: 0, max: 523, visible: true },
-  { speed: 6000, letter: 'Y', machinePosition: 600, userPosition: 600, workplaceOffsets: [0,0,0,0,0,0,0,0,0], homed: true, min: 0, max: 1262, visible: true },
-  { speed: 2000, letter: 'Z', machinePosition: -20, userPosition: -20, workplaceOffsets: [0,0,0,0,0,0,0,0,0], homed: true, min: -180, max: 0, visible: true },
-  { speed: 8000, letter: 'U', machinePosition: 30, userPosition: 30, workplaceOffsets: [0,0,0,0,0,0,0,0,0], homed: true, min: 0, max: 60, visible: true },
+  { speed: 6000, letter: 'X', babystep: 0, machinePosition: 260, userPosition: 260, workplaceOffsets: [0,0,0,0,0,0,0,0,0], homed: true, min: 0, max: 523, visible: true },
+  { speed: 6000, letter: 'Y', babystep: 0, machinePosition: 600, userPosition: 600, workplaceOffsets: [0,0,0,0,0,0,0,0,0], homed: true, min: 0, max: 1262, visible: true },
+  { speed: 2000, letter: 'Z', babystep: 0, machinePosition: -20, userPosition: -20, workplaceOffsets: [0,0,0,0,0,0,0,0,0], homed: true, min: -180, max: 0, visible: true },
+  { speed: 8000, letter: 'U', babystep: 0, machinePosition: 30, userPosition: 30, workplaceOffsets: [0,0,0,0,0,0,0,0,0], homed: true, min: 0, max: 60, visible: true },
 ];
 
 const state = {
@@ -186,6 +187,7 @@ function generateBigProgram(targetBytes) {
 
 // --- Simulated motion ----------------------------------------------------
 
+let model_speedFactor = 1;
 let t = 0;
 setInterval(() => {
   t += 0.1;
@@ -240,7 +242,7 @@ function buildModel(liveOnly) {
           : { ...a, machinePosition: round(a.machinePosition), userPosition: round(a.userPosition) },
       ),
       workplaceNumber: 0,
-      speedFactor: 1,
+      speedFactor: model_speedFactor,
       currentMove: { requestedSpeed: state.status === 'processing' ? 2400 : 0, topSpeed: 2400 },
     },
     network: { name: 'Sebs CNC', hostname: 'sebscnc' },
@@ -429,6 +431,18 @@ function handleGcode(gcode) {
         pushReply(`Started job ${m[1]}`);
         bumpSeq('job');
         bumpSeq('state');
+      }
+    } else if (upper.startsWith('M220')) {
+      const m = /S([\d.]+)/.exec(upper);
+      if (m) { model_speedFactor = Number(m[1]) / 100; bumpSeq('move'); }
+      pushReply(`Speed factor ${Math.round(model_speedFactor * 100)}%`);
+    } else if (upper.startsWith('M290')) {
+      const m = /Z(-?[\d.]+)/.exec(upper);
+      if (m) {
+        const absolute = /R0/.test(upper);
+        axes[2].babystep = absolute ? Number(m[1]) : axes[2].babystep + Number(m[1]);
+        bumpSeq('move');
+        pushReply(`Babystep Z ${axes[2].babystep}`);
       }
     } else if (upper.startsWith('M25')) {
       state.status = 'paused';

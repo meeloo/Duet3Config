@@ -75,10 +75,14 @@ const DEFAULT_LAYOUT: Layout = {
     {
       id: 'job',
       name: 'Job',
-      rows: 2,
+      // Three rows so the viewer keeps its height while preflight, overrides
+      // and run-from-line stack beside it — all three act on the program in
+      // the viewer, and run-from-line needs its Pick button on the same page.
+      rows: 3,
       panels: [
-        { key: 'viewer-1', id: 'viewer', width: 8, rows: 2 },
+        { key: 'viewer-1', id: 'viewer', width: 8, rows: 3 },
         { key: 'preflight-1', id: 'preflight', width: 4, rows: 1 },
+        { key: 'overrides-1', id: 'overrides', width: 4, rows: 1 },
         { key: 'resume-1', id: 'resume', width: 4, rows: 1 },
       ],
     },

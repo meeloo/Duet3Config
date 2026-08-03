@@ -54,6 +54,8 @@ export interface Axis {
   workOffsets: number[];
   /** Maximum feed for this axis in mm/min, 0 when the controller doesn't say. */
   maxFeed: number;
+  /** Live offset applied on top of the work offset (RRF babystep), mm. */
+  babystep: number;
 }
 
 export interface Spindle {

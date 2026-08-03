@@ -639,3 +639,20 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
   padding: 3px 0; font-size: 12px; border-bottom: 1px solid var(--border); }
 .resume-row span { color: var(--text-dim); }
 .resume-row strong { font-family: var(--mono); font-weight: 500; text-align: right; }
+
+/* ---------- Overrides ---------- */
+
+.overrides { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px;
+  overflow: auto; height: 100%; }
+.ov-block { display: flex; flex-direction: column; gap: 7px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--border); }
+.ov-block:last-child { border-bottom: 0; }
+.ov-head { display: flex; justify-content: space-between; align-items: baseline; }
+.ov-head span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--text-dim); font-weight: 600; }
+.ov-head strong { font-family: var(--mono); font-size: 17px;
+  font-variant-numeric: tabular-nums; }
+.ov-head strong.changed { color: var(--warn); }
+.ov-slider { width: 100%; min-height: 0; padding: 0; accent-color: var(--accent);
+  background: transparent; border: 0; }
+.overrides p.hint { margin: 0; line-height: 1.5; }

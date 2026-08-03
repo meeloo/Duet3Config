@@ -263,6 +263,7 @@ export class RrfDriver implements MachineDriver {
       visible: a.visible !== false,
       workOffsets: a.workplaceOffsets ?? [],
       maxFeed: a.speed ?? 0,
+      babystep: a.babystep ?? 0,
     }));
 
     const spindleOm = omSpindles.find((s) => s.max > 0) ?? omSpindles[0] ?? null;
