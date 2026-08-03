@@ -136,6 +136,15 @@ const FILES = {
     { type: 'f', name: 'bracket_roughing.nc', size: 48210, date: '2026-07-28T14:00:00' },
     { type: 'f', name: 'spoilboard_surface.nc', size: 9100, date: '2026-07-20T11:00:00' },
     { type: 'f', name: 'big_relief.nc', size: 3145728, date: '2026-08-01T09:00:00' },
+    // A real machine's gcodes folder is long, and a list that fits its panel
+    // never exercises the scrolling — which is exactly how a panel that cannot
+    // be scrolled on a tablet got shipped.
+    ...Array.from({ length: 40 }, (_, i) => ({
+      type: 'f',
+      name: `job_${String(i + 1).padStart(3, '0')}.nc`,
+      size: 1000 + i * 137,
+      date: '2026-07-01T10:00:00',
+    })),
   ],
 };
 

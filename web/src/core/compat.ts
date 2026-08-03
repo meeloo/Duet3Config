@@ -145,7 +145,10 @@ function installPointerEvents(): void {
   document.addEventListener(
     'pointerdown',
     (e) => {
-      if (e.isTrusted) native = true;
+      // Only a touch-driven one counts. An engine that reports mouse pointer
+      // events but not touch ones still needs the synthesis for touch, and
+      // saying otherwise would disable it on exactly that hybrid.
+      if (e.isTrusted && e.pointerType !== 'mouse') native = true;
     },
     true,
   );
@@ -184,7 +187,15 @@ function installPointerEvents(): void {
   document.addEventListener(
     'touchstart',
     (e) => {
-      if (e.touches.length !== 1) return; // pinch and friends are not ours
+      if (e.touches.length !== 1) {
+        // A second finger means a two-finger gesture — a pinch — not a drag.
+        // End the one being synthesised, or the 3D view keeps orbiting from
+        // the first finger while the pinch scales it.
+        if (origin && !suppressed) dispatch('pointerup', e.changedTouches[0], e);
+        captured = null;
+        origin = null;
+        return;
+      }
       suppressed = native;
       if (suppressed) return;
       captured = null;
@@ -197,7 +208,8 @@ function installPointerEvents(): void {
   document.addEventListener(
     'touchmove',
     (e) => {
-      if (suppressed || !origin) return;
+      // Multi-touch belongs to whatever is handling the gesture directly.
+      if (suppressed || !origin || e.touches.length > 1) return;
       dispatch('pointermove', e.changedTouches[0], e);
       // Only once something has claimed the gesture. Otherwise this would kill
       // scrolling everywhere, which is the opposite of the problem.

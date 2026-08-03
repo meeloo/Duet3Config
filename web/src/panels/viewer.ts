@@ -224,6 +224,59 @@ export class ViewerPanel extends PanelElement {
     canvas.addEventListener('pointercancel', end);
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
+    // Pinch to zoom.
+    //
+    // Touch events rather than pointer events, for two reasons: a pinch needs
+    // both points at once and pointer events deliver them as separate streams
+    // to be reassembled, and on the browser this matters most for there are no
+    // pointer events at all. Touch events are the one thing every tablet has.
+    //
+    // preventDefault rather than `touch-action: none`, which the canvas does
+    // declare but which Safari only understood from 13 — without it the page
+    // itself zooms and the model stays exactly where it was.
+    let pinch = 0;
+    const spread = (touches: TouchList): number =>
+      Math.hypot(
+        touches[0].clientX - touches[1].clientX,
+        touches[0].clientY - touches[1].clientY,
+      );
+
+    canvas.addEventListener(
+      'touchstart',
+      (e) => {
+        if (e.touches.length !== 2) return;
+        // A second finger turns a drag into a pinch; leaving the orbit running
+        // would spin the model while it scales.
+        dragging = null;
+        pinch = spread(e.touches);
+        e.preventDefault();
+      },
+      { passive: false },
+    );
+
+    canvas.addEventListener(
+      'touchmove',
+      (e) => {
+        if (e.touches.length !== 2 || !this.renderer) return;
+        e.preventDefault();
+        const now = spread(e.touches);
+        if (pinch > 0 && now > 0) {
+          const cam = this.renderer.camera;
+          // Fingers apart means a bigger spread, which means closer in, which
+          // means a smaller camera distance.
+          cam.distance = Math.max(1, Math.min(100000, (cam.distance * pinch) / now));
+        }
+        pinch = now;
+      },
+      { passive: false },
+    );
+
+    const endPinch = (e: TouchEvent) => {
+      if (e.touches.length < 2) pinch = 0;
+    };
+    canvas.addEventListener('touchend', endPinch);
+    canvas.addEventListener('touchcancel', endPinch);
+
     canvas.addEventListener(
       'wheel',
       (e) => {
