@@ -34,6 +34,7 @@ import {
   describeKey,
   differingKeys,
   followMachine,
+  noteAdopted,
   readRemoteSettings,
   setFollowMachine,
   settingsPath,
@@ -142,6 +143,7 @@ export class TopBar extends PanelElement {
       return;
     }
     applySettings(remote.bundle);
+    noteAdopted(remote.bundle);
     location.reload();
   }
 

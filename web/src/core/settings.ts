@@ -189,22 +189,86 @@ export async function writeRemoteSettings(): Promise<SettingsBundle> {
   if (!path || !driver) throw new SettingsError('not connected');
   const bundle = collectSettings();
   await driver.writeFile(path, new TextEncoder().encode(serialiseSettings(bundle)));
+  // What we just pushed is by definition what we have, so connecting again must
+  // not treat it as something new to adopt.
+  rememberAdopted(bundle);
   return bundle;
 }
 
 /**
- * Adopt the machine's settings if this browser has opted in.
+ * Remember which version of the machine's copy this browser has taken.
  *
- * One-way and idempotent: after applying, the two copies agree, so the next
- * connection finds nothing to do and there is no reload loop. Called once per
- * successful connection.
+ * The trigger for adopting has to be "the machine's copy CHANGED", not "the two
+ * copies differ". They differ almost immediately and permanently: dockview
+ * rewrites the layout with exact pixel sizes every time the window is a
+ * different shape, so a browser that adopted a layout five seconds ago already
+ * disagrees with the file it came from. Reloading on any difference therefore
+ * loops forever — adopt, reload, dashboard re-lays-out and saves, differ,
+ * adopt — which is exactly what it did.
+ */
+function adoptedStamp(): string {
+  return loadSetting<string>('adoptedSettingsStamp', '');
+}
+
+function rememberAdopted(bundle: SettingsBundle): void {
+  saveSetting('adoptedSettingsStamp', bundle.written);
+}
+
+/**
+ * Belt and braces against a reload loop: refuse to reload twice in quick
+ * succession, whatever the stamp says.
+ *
+ * A rate limit rather than a latch. Latching — one adopt per tab, ever — kills
+ * a runaway but also means a genuine push from another browser never lands
+ * until the tab is closed, which is the feature not working. A loop reloads
+ * every few seconds; a real push arrives minutes apart at best, so a window
+ * this size separates them cleanly.
+ *
+ * The stamp above is what makes this correct. This only makes it survivable if
+ * the stamp is ever wrong, because a loop leaves no way to reach the setting
+ * that turns it off.
+ */
+const RELOAD_COOLDOWN_MS = 30_000;
+
+function reloadedRecently(): boolean {
+  try {
+    const at = Number(sessionStorage.getItem('cnc.settingsReloadedAt') ?? 0);
+    return at > 0 && Date.now() - at < RELOAD_COOLDOWN_MS;
+  } catch {
+    return false;
+  }
+}
+
+function markReloaded(): void {
+  try {
+    sessionStorage.setItem('cnc.settingsReloadedAt', String(Date.now()));
+  } catch {
+    // Private mode; the stamp above is still doing the real work.
+  }
+}
+
+/** Record a manual pull, so connecting afterwards does not adopt it again. */
+export function noteAdopted(bundle: SettingsBundle): void {
+  rememberAdopted(bundle);
+}
+
+/**
+ * Adopt the machine's settings if this browser has opted in AND the machine's
+ * copy has changed since this browser last took it.
  *
  * @returns the keys that changed, or an empty array if nothing did.
  */
 export async function syncOnConnect(): Promise<string[]> {
-  if (!followMachine()) return [];
+  if (!followMachine() || reloadedRecently()) return [];
+
   const remote = await readRemoteSettings();
   if (remote.kind !== 'ok') return [];
+  if (remote.bundle.written && remote.bundle.written === adoptedStamp()) return [];
+
   const changed = applySettings(remote.bundle);
+  rememberAdopted(remote.bundle);
+  if (!changed.length) return [];
+
+  markReloaded();
   return changed;
 }
