@@ -104,6 +104,7 @@ const FILES = {
   '/gcodes': [
     { type: 'f', name: 'bracket_roughing.nc', size: 48210, date: '2026-07-28T14:00:00' },
     { type: 'f', name: 'spoilboard_surface.nc', size: 9100, date: '2026-07-20T11:00:00' },
+    { type: 'f', name: 'big_relief.nc', size: 3145728, date: '2026-08-01T09:00:00' },
   ],
 };
 
@@ -113,6 +114,10 @@ const FILE_CONTENT = {
   '/sys/dustShoeConfig.g': `global dustShoeEngaged    = false\nglobal dustShoePrevZ      = move.axes[2].machinePosition\nglobal dustShoeEngagedU   = 30\n`,
   '/gcodes/spoilboard_surface.nc': generateSurfacingProgram(),
   '/gcodes/bracket_roughing.nc': generateBracketProgram(),
+  // A file the size of a real 3D carve, so the download and parse progress
+  // bars have something to actually report. Small test files hide the whole
+  // problem the worker exists to solve.
+  '/gcodes/big_relief.nc': generateBigProgram(3 * 1024 * 1024),
 };
 
 // Keep listed sizes honest so filePosition/size progress means something.
@@ -157,6 +162,24 @@ function generateBracketProgram() {
   }
   // A circular pocket, to check full-circle arcs.
   out.push('G0 X120 Y130', 'G1 Z-3 F400', 'G3 X120 Y130 I30 J0 F1800', 'G0 Z5');
+  out.push('M5', 'G0 X0 Y0', 'M30');
+  return out.join('\n');
+}
+
+/** Bulk 3D-carve-shaped output: many short G1 moves, occasional retracts. */
+function generateBigProgram(targetBytes) {
+  const out = ['(large relief)', 'G21 G90 G17', 'T3 M6', 'M3 S18000', 'G0 Z5'];
+  let bytes = 60;
+  let i = 0;
+  while (bytes < targetBytes) {
+    const x = (Math.sin(i * 0.017) * 180 + 220).toFixed(3);
+    const y = (Math.cos(i * 0.013) * 320 + 400).toFixed(3);
+    const z = (Math.sin(i * 0.005) * 3 - 4).toFixed(3);
+    const line = i % 97 === 0 ? 'G0 Z5' : `G1 X${x} Y${y} Z${z} F2200`;
+    out.push(line);
+    bytes += line.length + 1;
+    i++;
+  }
   out.push('M5', 'G0 X0 Y0', 'M30');
   return out.join('\n');
 }
@@ -328,8 +351,13 @@ const server = createServer(async (req, res) => {
         return res.end('not found');
       }
       cors(res);
-      res.writeHead(200, { 'Content-Type': 'text/plain' });
-      return res.end(content);
+      // Content-Length matters: without it the browser gets a chunked response
+      // and a client can only show an indeterminate bar. A real controller knows
+      // the file size and sends it, so the mock must too — otherwise the
+      // determinate progress path never gets exercised here.
+      const body = Buffer.from(content, 'utf8');
+      res.writeHead(200, { 'Content-Type': 'text/plain', 'Content-Length': body.length });
+      return res.end(body);
     }
 
     case '/rr_upload': {

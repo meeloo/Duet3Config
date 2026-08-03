@@ -14,7 +14,8 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { PanelElement, registerPanel } from '../ui/panel.js';
 import { activeDriver, capabilities, connected, loadSetting, machine, run, saveSetting } from '../core/store.js';
 import { basename, formatBytes } from '../core/util.js';
-import { parseGcode, type ParsedToolpath } from '../viewer/parse.js';
+import { type ParsedToolpath } from '../viewer/parse.js';
+import { parseAsync } from '../viewer/parse-client.js';
 import { ToolpathRenderer, type Box, type Projection, type ViewName } from '../viewer/render.js';
 import type { FileEntry } from '../machine/types.js';
 import { theme, viewerPalette } from '../core/theme.js';
@@ -32,7 +33,8 @@ export class ViewerPanel extends PanelElement {
 
   private path: ParsedToolpath | null = null;
   private loadedFrom: string | null = null;
-  private loading = false;
+  /** Null when idle; otherwise what is happening and how far along it is. */
+  private progress: { phase: 'download' | 'parse'; value: number | null } | null = null;
   private error: string | null = null;
   private showRapids = true;
   private followJob = true;
@@ -59,7 +61,7 @@ export class ViewerPanel extends PanelElement {
     // at before they are written to the controller.
     this.bind(() => {
       const p = previewProgram.get();
-      if (p) this.showGenerated(p.name, p.gcode);
+      if (p) void this.showGenerated(p.name, p.gcode);
     });
     this.onDispose(() => this.teardown());
   }
@@ -295,32 +297,42 @@ export class ViewerPanel extends PanelElement {
       return;
     }
 
-    this.loading = true;
+    this.progress = { phase: 'download', value: 0 };
     this.requestUpdate();
 
-    const bytes = await run(`load ${entry.name}`, (d) => d.readFile(entry.path));
+    const bytes = await run(`load ${entry.name}`, (d) =>
+      d.readFile(entry.path, (loaded, total) => {
+        this.progress = { phase: 'download', value: total ? loaded / total : null };
+        this.requestUpdate();
+      }),
+    );
     if (!bytes) {
-      this.loading = false;
+      this.progress = null;
       this.requestUpdate();
       return;
     }
 
     try {
-      const parsed = parseGcode(new TextDecoder().decode(bytes));
+      this.progress = { phase: 'parse', value: 0 };
+      this.requestUpdate();
+      const parsed = await parseAsync(new TextDecoder().decode(bytes), (value) => {
+        this.progress = { phase: 'parse', value };
+        this.requestUpdate();
+      });
       cache.set(entry.path, parsed);
       this.applyToolpath(entry.path, parsed);
     } catch (err) {
       this.error = `parse failed: ${(err as Error).message}`;
     } finally {
-      this.loading = false;
+      this.progress = null;
       this.requestUpdate();
     }
   }
 
   /** Render a program that exists only in the browser, before it is uploaded. */
-  private showGenerated(name: string, gcode: string): void {
+  private async showGenerated(name: string, gcode: string): Promise<void> {
     try {
-      const parsed = parseGcode(gcode);
+      const parsed = await parseAsync(gcode);
       this.error = parsed.positions.length ? null : 'Generated program contains no motion';
       // Deliberately not cached by path — a generated program changes every time
       // a parameter moves, and it has no file on the controller yet.
@@ -455,8 +467,29 @@ export class ViewerPanel extends PanelElement {
 
         <div class="viewer-canvas-wrap">
           <canvas></canvas>
-          ${this.loading ? html`<div class="viewer-overlay">Loading and parsing…</div>` : nothing}
-          ${!this.path && !this.loading
+          ${this.progress
+            ? html`
+                <div class="viewer-overlay">
+                  <div class="load-box">
+                    <span class="load-label">
+                      ${this.progress.phase === 'download' ? 'Downloading' : 'Parsing'}
+                      ${this.progress.value != null
+                        ? html`<em>${Math.round(this.progress.value * 100)}%</em>`
+                        : nothing}
+                    </span>
+                    <div class="load-track">
+                      <div
+                        class="load-fill ${this.progress.value == null ? 'indeterminate' : ''}"
+                        style=${this.progress.value != null
+                          ? `width:${Math.round(this.progress.value * 100)}%`
+                          : ''}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              `
+            : nothing}
+          ${!this.path && !this.progress
             ? html`<div class="viewer-overlay">
                 ${connected.get() ? 'Open a G-code file to view its toolpath' : 'Not connected'}
               </div>`

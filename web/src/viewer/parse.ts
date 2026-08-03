@@ -41,7 +41,15 @@ export interface ParsedToolpath {
 
 const ARC_TOLERANCE = 0.02; // mm of chord deviation
 
-export function parseGcode(source: string): ParsedToolpath {
+/**
+ * @param onProgress called with 0..1 as parsing advances. Reported per chunk of
+ *   lines rather than per line — the callback crosses a worker boundary, and at
+ *   120k lines a per-line postMessage would cost more than the parse.
+ */
+export function parseGcode(
+  source: string,
+  onProgress?: (fraction: number) => void,
+): ParsedToolpath {
   const positions: number[] = [];
   const offsets: number[] = [];
   const kinds: number[] = [];
@@ -110,7 +118,11 @@ export function parseGcode(source: string): ParsedToolpath {
   // the overwhelming case, so only pay for TextEncoder when a line isn't.
   const encoder = new TextEncoder();
 
+  // ~100 updates over the whole file, whatever its size.
+  const progressEvery = Math.max(1, Math.floor(lines.length / 100));
+
   for (let lineNo = 0; lineNo < lines.length; lineNo++) {
+    if (onProgress && lineNo % progressEvery === 0) onProgress(lineNo / lines.length);
     const rawLine = lines[lineNo];
     const lineStart = byteOffset;
     byteOffset += isAscii(rawLine) ? rawLine.length + 1 : encoder.encode(rawLine).length + 1;
@@ -200,6 +212,8 @@ export function parseGcode(source: string): ParsedToolpath {
       x = nx; y = ny; z = nz;
     }
   }
+
+  onProgress?.(1);
 
   if (!positions.length) {
     min[0] = min[1] = min[2] = 0;

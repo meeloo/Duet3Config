@@ -42,8 +42,10 @@ function gzipDist() {
 
 /** @type {import('esbuild').BuildOptions} */
 const options = {
-  entryPoints: ['src/main.ts'],
-  outfile: 'dist/cnc.js',
+  // The parser worker is a separate entry: it is loaded by URL at runtime, so
+  // it must exist as its own file rather than being inlined into the bundle.
+  entryPoints: { cnc: 'src/main.ts', 'parse-worker': 'src/viewer/parse-worker.ts' },
+  outdir: 'dist',
   bundle: true,
   format: 'esm',
   target: ['es2022'],

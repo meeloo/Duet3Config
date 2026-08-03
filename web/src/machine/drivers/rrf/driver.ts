@@ -454,8 +454,11 @@ export class RrfDriver implements MachineDriver {
       );
   }
 
-  readFile(path: string): Promise<Uint8Array> {
-    return this.requireClient().download(path);
+  readFile(
+    path: string,
+    onProgress?: (loaded: number, total: number | null) => void,
+  ): Promise<Uint8Array> {
+    return this.requireClient().download(path, onProgress);
   }
 
   writeFile(path: string, data: Uint8Array): Promise<void> {

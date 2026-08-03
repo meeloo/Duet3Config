@@ -69,7 +69,12 @@ export interface MachineDriver {
 
   // --- Files -------------------------------------------------------------
   listFiles(dir: string): Promise<FileEntry[]>;
-  readFile(path: string): Promise<Uint8Array>;
+  /**
+   * @param onProgress receives (bytesLoaded, totalBytes|null). Optional so a
+   *   driver that cannot report it simply doesn't, and callers show an
+   *   indeterminate bar instead.
+   */
+  readFile(path: string, onProgress?: (loaded: number, total: number | null) => void): Promise<Uint8Array>;
   writeFile(path: string, data: Uint8Array): Promise<void>;
   deleteFile(path: string): Promise<void>;
   makeDirectory(path: string): Promise<void>;

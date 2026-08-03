@@ -98,9 +98,6 @@ export class RrfClient {
         credentials: 'omit',
       });
     } catch (e) {
-      // A cross-origin fetch that trips CORS surfaces as an opaque network
-      // failure ("Load failed" in Safari, "Failed to fetch" in Chrome) with no
-      // detail, so say what it almost certainly is rather than echoing that.
       // A fetch that dies below HTTP level gives no detail ("Load failed" in
       // Safari, "Failed to fetch" in Chrome). Don't assert a cause we can't
       // observe — name the candidates, in the order they're actually likely.
@@ -256,9 +253,37 @@ export class RrfClient {
     return out;
   }
 
-  async download(path: string): Promise<Uint8Array> {
+  async download(
+    path: string,
+    onProgress?: (loaded: number, total: number | null) => void,
+  ): Promise<Uint8Array> {
     const res = await this.request('rr_download', { name: path });
-    return new Uint8Array(await res.arrayBuffer());
+    if (!onProgress || !res.body) return new Uint8Array(await res.arrayBuffer());
+
+    // Read the stream so a multi-megabyte pull off the SD card can show real
+    // progress. Content-Length is usually present; when it isn't, `total` is
+    // null and the caller shows an indeterminate bar rather than a wrong one.
+    const header = res.headers.get('Content-Length');
+    const total = header ? Number(header) : null;
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let loaded = 0;
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      loaded += value.length;
+      onProgress(loaded, Number.isFinite(total) ? total : null);
+    }
+
+    const out = new Uint8Array(loaded);
+    let at = 0;
+    for (const c of chunks) {
+      out.set(c, at);
+      at += c.length;
+    }
+    return out;
   }
 
   async downloadText(path: string): Promise<string> {
