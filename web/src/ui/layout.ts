@@ -70,7 +70,7 @@ const DEFAULT_PAGES: PageSpec[] = [
   // Coordinates beside probing on purpose: the skew routine writes a rotation
   // and the only place that rotation is visible is the Coordinates panel.
   { id: 'setup', name: 'Setup', panels: ['wcs', 'probe'], stacked: { machining: 'probe' } },
-  { id: 'advanced', name: 'Advanced', panels: ['om'], stacked: { console: 'om', files: 'om' } },
+  { id: 'advanced', name: 'Advanced', panels: ['diagnostics', 'om'], stacked: { console: 'om', files: 'om' } },
 ];
 
 function defaultLayout(): LayoutState {

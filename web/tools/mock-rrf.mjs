@@ -237,7 +237,23 @@ function pushReply(text) {
 
 function buildModel(liveOnly) {
   const model = {
-    boards: [{ shortName: 'MB6HC', name: 'Duet 3 MB6HC', firmwareName: 'RepRapFirmware for Duet 3 MB6HC', firmwareVersion: '3.6.0' }],
+    boards: [
+      {
+        shortName: 'MB6HC',
+        name: 'Duet 3 MB6HC',
+        firmwareName: 'RepRapFirmware for Duet 3 MB6HC',
+        firmwareVersion: '3.6.0',
+        firmwareDate: '2025-04-01',
+        uniqueId: '0JD0M-9P6M2-NW4SD-6JKF6-3S46L-TB1UA',
+        canAddress: 0,
+        freeRam: 47320,
+        // min/max are the extremes observed since boot, exactly as the firmware
+        // reports them — not permitted limits.
+        vIn: { current: round(23.8 + Math.sin(t * 0.3) * 0.4), min: 22.9, max: 24.4 },
+        v12: { current: 12.1, min: 11.8, max: 12.3 },
+        mcuTemp: { current: round(41.2 + Math.sin(t * 0.11) * 3), min: 24.6, max: 48.1 },
+      },
+    ],
     global: globals,
     job: { ...job },
     move: {
@@ -251,8 +267,21 @@ function buildModel(liveOnly) {
       speedFactor: model_speedFactor,
       currentMove: { requestedSpeed: state.status === 'processing' ? 2400 : 0, topSpeed: 2400 },
     },
-    network: { name: 'Sebs CNC', hostname: 'sebscnc' },
-    sensors: { probes: [{ value: [0], type: 8, triggered: false }] },
+    network: {
+      name: 'Sebs CNC',
+      hostname: 'sebscnc',
+      interfaces: [
+        { type: 'ethernet', state: 'active', actualIP: '192.168.1.42', mac: 'BE:EF:00:11:22:33',
+          gateway: '192.168.1.1', subnet: '255.255.255.0', speed: 100, numReconnects: 0 },
+      ],
+    },
+    // Two probes, matching config-probe.g: K0 tool setter, K1 workpiece.
+    sensors: {
+      probes: [
+        { value: [probeTriggered(0) ? 1000 : 0], type: 8, triggered: probeTriggered(0), threshold: 500 },
+        { value: [probeTriggered(1) ? 1000 : 0], type: 8, triggered: probeTriggered(1), threshold: 500 },
+      ],
+    },
     seqs,
     spindles: [{ ...spindle, current: Math.round(spindle.current) }],
     state: { ...state },
@@ -262,6 +291,14 @@ function buildModel(liveOnly) {
 }
 
 const round = (n) => Math.round(n * 1000) / 1000;
+
+/**
+ * Probe state. Toggled by rr_gcode "M999 PROBE<n>" so the diagnostics panel can
+ * be exercised without a probe to poke — the real board reports this from the
+ * input pin and nothing else changes it.
+ */
+const probesTriggered = [false, false];
+const probeTriggered = (i) => probesTriggered[i] === true;
 
 // --- HTTP ----------------------------------------------------------------
 
@@ -517,6 +554,13 @@ function handleGcode(gcode) {
         }
       }
       bumpSeq('move');
+    } else if (/^M999 PROBE([01])$/.test(upper.trim())) {
+      // Test hook, not a real RRF command: flips a probe so the diagnostics
+      // panel can be exercised without something to poke the probe with.
+      const i = Number(/^M999 PROBE([01])$/.exec(upper.trim())[1]);
+      probesTriggered[i] = !probesTriggered[i];
+      pushReply(`probe ${i} ${probesTriggered[i] ? 'triggered' : 'open'}`);
+      bumpSeq('sensors');
     } else if (upper.startsWith('SET GLOBAL.')) {
       const m = /^set global\.(\w+)\s*=\s*(.+)$/i.exec(cmd);
       if (m) {

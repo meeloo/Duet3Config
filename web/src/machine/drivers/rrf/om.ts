@@ -91,16 +91,60 @@ export interface OmTool {
   state?: string;
 }
 
+/** current/min/max triple RRF uses for voltages and temperatures. */
+export interface OmRange {
+  current?: number;
+  min?: number;
+  max?: number;
+}
+
 export interface OmBoard {
   shortName?: string;
   name?: string;
   firmwareVersion?: string;
   firmwareName?: string;
+  firmwareDate?: string;
+  uniqueId?: string;
+  canAddress?: number;
+  /** Never-used RAM, bytes. */
+  freeRam?: number;
+  /** min/max here are the extremes *observed*, not permitted limits. */
+  vIn?: OmRange;
+  v12?: OmRange;
+  mcuTemp?: OmRange;
+}
+
+export interface OmNetworkInterface {
+  type?: string;
+  state?: string;
+  actualIP?: string;
+  mac?: string;
+  gateway?: string;
+  subnet?: string;
+  /** WiFi RSSI, dBm. */
+  signal?: number;
+  speed?: number;
+  numReconnects?: number;
 }
 
 export interface OmNetwork {
   name?: string;
   hostname?: string;
+  interfaces?: OmNetworkInterface[];
+}
+
+export interface OmProbe {
+  type?: number;
+  value?: number[];
+  triggered?: boolean;
+  threshold?: number;
+  diveHeight?: number;
+  lastStopHeight?: number;
+}
+
+export interface OmSensors {
+  probes?: OmProbe[];
+  [key: string]: unknown;
 }
 
 export interface OmSeqs {
@@ -128,7 +172,7 @@ export interface ObjectModel {
   job?: OmJob;
   move?: OmMove;
   network?: OmNetwork;
-  sensors?: Record<string, unknown>;
+  sensors?: OmSensors;
   seqs?: OmSeqs;
   spindles?: OmSpindle[];
   state?: OmState;

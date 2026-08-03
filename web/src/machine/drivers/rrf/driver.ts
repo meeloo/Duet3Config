@@ -6,6 +6,8 @@ import {
   emptyMachineState,
   type Axis,
   type Capabilities,
+  type DiagnosticItem,
+  type DiagnosticSection,
   type FileEntry,
   type LogLine,
   type MachineState,
@@ -19,9 +21,10 @@ import {
   mapSpindleState,
   mapStatus,
   type ObjectModel,
+  type OmRange,
   type OmSeqs,
 } from './om.js';
-import { joinPath } from '../../../core/util.js';
+import { formatBytes, formatDuration, joinPath } from '../../../core/util.js';
 
 /** Exposed through `driver.native` for the object-model browser panel. */
 export interface RrfNative {
@@ -525,6 +528,145 @@ export class RrfDriver implements MachineDriver {
 
   async runMacro(path: string): Promise<void> {
     await this.send(`M98 P"${path}"`);
+  }
+
+  // --- Diagnostics -------------------------------------------------------
+
+  /**
+   * Health readout assembled from the object model this driver already polls.
+   *
+   * Every value here is something the board reports. Nothing is compared
+   * against a threshold invented in this file — RRF's `vIn.min`/`vIn.max` are
+   * the *extremes observed*, not permitted limits, so they are shown as context
+   * beside the current reading rather than used to colour it. The only levels
+   * set are ones the controller itself asserts: a halted machine, a triggered
+   * probe, a poll that is failing.
+   *
+   * Anything needing real limits — driver temperature flags, stall detection,
+   * stack usage — lives behind the M122 button, because the firmware's own
+   * report is authoritative and decoding its bitfields here would be guesswork.
+   */
+  diagnostics(): DiagnosticSection[] {
+    const m = this.model;
+    const board = (m.boards ?? []).filter(Boolean)[0];
+    const sections: DiagnosticSection[] = [];
+
+    const range = (r: OmRange | undefined, unit: string, places = 1): DiagnosticItem['detail'] =>
+      r && (r.min != null || r.max != null)
+        ? `seen ${r.min?.toFixed(places) ?? '?'}–${r.max?.toFixed(places) ?? '?'}${unit}`
+        : undefined;
+
+    // --- Controller ---
+    const controller: DiagnosticItem[] = [];
+    if (board) {
+      controller.push({ label: 'Board', value: board.name ?? board.shortName ?? 'unknown' });
+      controller.push({
+        label: 'Firmware',
+        value: `${board.firmwareName ?? 'RepRapFirmware'} ${board.firmwareVersion ?? ''}`.trim(),
+        detail: board.firmwareDate ? `built ${board.firmwareDate}` : undefined,
+      });
+      if (board.uniqueId) controller.push({ label: 'Unique ID', value: board.uniqueId });
+    }
+    controller.push({
+      label: 'Status',
+      value: m.state?.status ?? 'unknown',
+      level: this.state.status === 'halted' ? 'bad' : 'ok',
+      detail: m.state?.machineMode ? `mode ${m.state.machineMode}` : undefined,
+    });
+    if (m.state?.upTime != null) {
+      controller.push({ label: 'Uptime', value: formatDuration(m.state.upTime) });
+    }
+    sections.push({
+      title: 'Controller',
+      items: controller,
+      actions: [
+        { label: 'M122', command: 'M122', title: "Full firmware diagnostics — printed to the console" },
+        { label: 'M98 config.g', command: 'M98 P"config.g"', title: 'Re-run config.g and report any errors' },
+      ],
+    });
+
+    // --- Power and temperature ---
+    const power: DiagnosticItem[] = [];
+    if (board?.vIn?.current != null) {
+      power.push({ label: 'VIN', value: `${board.vIn.current.toFixed(1)} V`, detail: range(board.vIn, ' V') });
+    }
+    if (board?.v12?.current != null) {
+      power.push({ label: '12V rail', value: `${board.v12.current.toFixed(1)} V`, detail: range(board.v12, ' V') });
+    }
+    if (board?.mcuTemp?.current != null) {
+      power.push({
+        label: 'MCU temperature',
+        value: `${board.mcuTemp.current.toFixed(1)} °C`,
+        detail: range(board.mcuTemp, ' °C'),
+      });
+    }
+    if (board?.freeRam != null) {
+      power.push({ label: 'Never-used RAM', value: formatBytes(board.freeRam) });
+    }
+    if (power.length) sections.push({ title: 'Power & temperature', items: power });
+
+    // --- Network ---
+    const interfaces = (m.network?.interfaces ?? []).filter(Boolean);
+    if (interfaces.length || m.network?.hostname) {
+      const net: DiagnosticItem[] = [];
+      if (m.network?.hostname) net.push({ label: 'Hostname', value: m.network.hostname });
+      interfaces.forEach((iface, i) => {
+        const bits = [iface.actualIP, iface.speed ? `${iface.speed} Mbps` : null].filter(Boolean);
+        net.push({
+          label: iface.type ? `${iface.type}${interfaces.length > 1 ? ` ${i}` : ''}` : `Interface ${i}`,
+          value: iface.state ?? 'unknown',
+          level: iface.state === 'active' ? 'ok' : 'info',
+          detail: [bits.join(' · '), iface.signal != null ? `signal ${iface.signal} dBm` : null]
+            .filter(Boolean)
+            .join(' · ') || undefined,
+        });
+      });
+      sections.push({ title: 'Network', items: net });
+    }
+
+    // --- Probes ---
+    // Live probe readings are the fastest way to tell a wiring fault from a
+    // configuration one, and to confirm a probe triggers before trusting a
+    // routine to drive the spindle into the work with it.
+    const probes = (m.sensors?.probes ?? []).filter(Boolean);
+    sections.push({
+      title: 'Probes',
+      emptyNote: 'No probes configured — see M558 in config-probe.g.',
+      items: probes.map((probe, i) => ({
+        label: `K${i}`,
+        value: probe.triggered ? 'TRIGGERED' : 'open',
+        level: probe.triggered ? 'warn' : 'ok',
+        detail: [
+          probe.value?.length ? `reading ${probe.value.join(', ')}` : null,
+          probe.type != null ? `type ${probe.type}` : null,
+          probe.threshold != null ? `threshold ${probe.threshold}` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || undefined,
+      })),
+    });
+
+    // --- Connection ---
+    // Not from the board: this is how well *we* are talking to it, which is
+    // the one thing the board itself can never report.
+    sections.push({
+      title: 'Connection',
+      items: [
+        { label: 'Controller', value: this.config?.url ?? '—' },
+        {
+          label: 'Poll',
+          value: `every ${this.state.status === 'idle' || this.state.status === 'off' ? IDLE_POLL_INTERVAL_MS : POLL_INTERVAL_MS} ms`,
+        },
+        {
+          label: 'Failed polls',
+          value: String(this.consecutiveFailures),
+          level: this.consecutiveFailures > 0 ? 'warn' : 'ok',
+          detail: this.consecutiveFailures > 0 ? 'consecutive; the driver backs off and retries' : undefined,
+        },
+      ],
+    });
+
+    return sections;
   }
 
   // --- Prompts -----------------------------------------------------------

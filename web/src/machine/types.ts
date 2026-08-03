@@ -153,6 +153,43 @@ export function emptyMachineState(): MachineState {
   };
 }
 
+/**
+ * A controller health readout, in a shape no controller dictates.
+ *
+ * Deliberately pre-formatted strings rather than numbers with units: what is
+ * worth showing differs enormously between controllers, and a model that tried
+ * to name every field would be a list of RepRapFirmware's fields with the
+ * others missing. The driver decides what matters and how to say it; the panel
+ * only lays it out.
+ *
+ * `level` is for facts the controller itself asserts — a halted machine, a
+ * probe that is triggered, a poll that is failing. It must never be an invented
+ * threshold: a supply voltage shown in red because someone guessed at a limit
+ * teaches the operator to ignore red.
+ */
+export type DiagnosticLevel = 'ok' | 'warn' | 'bad' | 'info';
+
+export interface DiagnosticItem {
+  label: string;
+  value: string;
+  level?: DiagnosticLevel;
+  /** Secondary line — ranges, context, why the level is what it is. */
+  detail?: string;
+}
+
+export interface DiagnosticSection {
+  title: string;
+  items: DiagnosticItem[];
+  /**
+   * Commands this section offers. They are in the controller's own dialect and
+   * come *from* the driver, so the panel stays vendor-neutral by sending them
+   * back verbatim without knowing what they mean.
+   */
+  actions?: Array<{ label: string; command: string; title?: string }>;
+  /** Shown when the section has nothing to report. */
+  emptyNote?: string;
+}
+
 export interface FileEntry {
   name: string;
   /** Controller-absolute path. */

@@ -14,6 +14,7 @@ import {
   defaultCapabilities,
   emptyMachineState,
   type Capabilities,
+  type DiagnosticSection,
   type FileEntry,
   type LogLine,
   type MachineState,
@@ -130,6 +131,11 @@ export class CarveraDriver implements MachineDriver {
   async cancelJob(): Promise<void> {
     todo('cancelJob');
   }
+  /** Nothing to report until the transport exists; the panel hides itself. */
+  diagnostics(): DiagnosticSection[] {
+    return [];
+  }
+
   async runMacro(_path: string): Promise<void> {
     todo('runMacro');
   }

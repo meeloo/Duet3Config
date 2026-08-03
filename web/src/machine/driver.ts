@@ -14,6 +14,7 @@
 
 import type {
   Capabilities,
+  DiagnosticSection,
   FileEntry,
   LogLine,
   MachineState,
@@ -104,6 +105,14 @@ export interface MachineDriver {
   cancelJob(): Promise<void>;
   /** Run a macro file on the controller. */
   runMacro(path: string): Promise<void>;
+
+  // --- Diagnostics -------------------------------------------------------
+  /**
+   * Controller health, derived from state the driver already holds. Synchronous
+   * and side-effect free so the panel can call it on every render; a driver with
+   * nothing to report returns an empty array and the panel hides itself.
+   */
+  diagnostics(): DiagnosticSection[];
 
   // --- Prompts -----------------------------------------------------------
   /** Answer a blocking prompt. `value` is supplied for input-mode prompts. */

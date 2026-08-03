@@ -365,6 +365,26 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .wcs-rot-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 6px 14px; }
 
+/* ---------- Diagnostics ---------- */
+
+.diagnostics { padding: 10px 12px; display: flex; flex-direction: column; gap: 14px;
+  height: 100%; overflow: auto; }
+.diag-section { display: flex; flex-direction: column; gap: 5px; }
+.diag-title { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-faint);
+  font-weight: 600; border-bottom: 1px solid var(--border); padding-bottom: 3px; }
+.diag-actions { display: flex; gap: 4px; }
+.diag-item { display: grid; grid-template-columns: minmax(90px, 1fr) auto; gap: 2px 10px;
+  align-items: baseline; }
+.diag-label { color: var(--text-dim); font-size: 12px; }
+.diag-value { font-family: var(--mono); font-size: 13px; text-align: right;
+  font-variant-numeric: tabular-nums; }
+.diag-value.ok { color: var(--good); }
+.diag-value.warn { color: var(--warn); }
+.diag-value.bad { color: var(--bad); font-weight: 700; }
+.diag-value.info { color: var(--text-dim); }
+.diag-detail { grid-column: 1 / -1; color: var(--text-faint); font-size: 11px; }
+
 /* ---------- Jog ---------- */
 
 .jog { padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; height: 100%; }
