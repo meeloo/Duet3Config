@@ -18,7 +18,7 @@ export interface OmAxis {
   max: number;
   visible: boolean;
   babystep?: number;
-  /** Maximum feed, mm/min (M203). */
+  /** Maximum feed, mm/MINUTE (M203). Unlike move.currentMove, which is mm/s. */
   speed?: number;
 }
 
@@ -26,9 +26,25 @@ export interface OmMove {
   axes: OmAxis[];
   workplaceNumber: number;
   speedFactor: number;
+  /**
+   * BEWARE the units here: RepRapFirmware reports them differently within this
+   * one subtree, and nothing in the JSON says so.
+   *
+   *   currentMove.*  — mm/SECOND (GetRequestedSpeedMmPerSec, GetTopSpeedMmPerSec,
+   *                    GetAccelerationMmPerSecSquared in Move.cpp)
+   *   axes[].speed   — mm/MINUTE (InverseConvertSpeedToMmPerMin)
+   *
+   * The neutral model is mm/min throughout, so currentMove needs ×60 and
+   * axes[].speed does not. Reading the first as mm/min makes every feed
+   * readout 60× too small, which looks plausible enough to survive a glance:
+   * a 6000 mm/min jog shows as "100".
+   */
   currentMove?: {
+    /** mm/s. */
     requestedSpeed?: number;
+    /** mm/s. */
     topSpeed?: number;
+    /** mm/s². */
     acceleration?: number;
   };
   /**

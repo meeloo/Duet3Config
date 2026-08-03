@@ -238,7 +238,9 @@ let model_speedFactor = 1;
 let t = 0;
 setInterval(() => {
   t += 0.1;
-  if (state.status === 'processing') {
+  // A resume with no file loaded is a real sequence — pause, cancel (which
+  // clears job.file), resume — and dereferencing it crashed the mock.
+  if (state.status === 'processing' && job.file) {
     // Sweep through the loaded program so filePosition advances.
     // Pace the sweep so any file takes roughly 30 s, whatever its size.
     job.filePosition = Math.min(job.file.size, job.filePosition + job.file.size / 300);
@@ -308,7 +310,11 @@ function buildModel(liveOnly) {
       rotation: { angle: rotation.angle, centre: [...rotation.centre] },
       compensation: { ...compensation },
       speedFactor: model_speedFactor,
-      currentMove: { requestedSpeed: state.status === 'processing' ? 2400 : 0, topSpeed: 2400 },
+      // mm/SECOND, like the real board — RRF reports currentMove per second
+      // while axes[].speed is per minute. Reporting a friendly mm/min here is
+      // exactly how a 60x error in the feed readout survived being looked at.
+      // 40 mm/s is the 2400 mm/min the mock's programs ask for.
+      currentMove: { requestedSpeed: state.status === 'processing' ? 40 : 0, topSpeed: 40 },
     },
     network: {
       name: 'Sebs CNC',
@@ -534,8 +540,12 @@ function handleGcode(gcode) {
       state.status = 'paused';
       bumpSeq('state');
     } else if (upper.startsWith('M24')) {
-      state.status = 'processing';
-      bumpSeq('state');
+      if (!job.file) {
+        pushReply('Error: M24: no file selected');
+      } else {
+        state.status = 'processing';
+        bumpSeq('state');
+      }
     } else if (upper.startsWith('M0')) {
       state.status = 'idle';
       job.file = null;

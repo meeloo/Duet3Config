@@ -270,6 +270,7 @@ export class RrfDriver implements MachineDriver {
       max: a.max ?? 0,
       visible: a.visible !== false,
       workOffsets: a.workplaceOffsets ?? [],
+      // Already mm/min — this one the firmware converts for us.
       maxFeed: a.speed ?? 0,
       babystep: a.babystep ?? 0,
     }));
@@ -349,7 +350,12 @@ export class RrfDriver implements MachineDriver {
             timeout: box.timeout || null,
           }
         : null,
-      feedRate: m.move?.currentMove?.requestedSpeed ?? null,
+      // ×60: currentMove is mm/s in the object model, the neutral model is
+      // mm/min. See the units warning on OmMove.currentMove.
+      feedRate:
+        m.move?.currentMove?.requestedSpeed != null
+          ? m.move.currentMove.requestedSpeed * 60
+          : null,
       feedMultiplier: m.move?.speedFactor ?? 1,
       // The ATC and dust shoe state in this machine's config lives entirely in
       // RRF globals, and globals are part of the object model — so panels get
