@@ -21,6 +21,9 @@ import { createServer } from 'node:http';
 const PORT = Number(process.argv[2] ?? 8090);
 const CORS = process.argv.includes('--cors');
 
+/** Milliseconds to sit on a snapshot before answering, to imitate a LAN camera. */
+const LATENCY = Number(process.env.MOCK_LATENCY ?? 0);
+
 const USER = 'admin';
 const PASSWORD = 'cnc';
 
@@ -196,6 +199,9 @@ const server = createServer(async (req, res) => {
   }
 
   if (url.searchParams.get('cmd') === 'Snap') {
+    // A real camera takes time to produce a frame, and that time is exactly
+    // what a request-wait-request loop pays for on every frame.
+    if (LATENCY) await new Promise((r) => setTimeout(r, LATENCY));
     const svg = snapshot();
     cors(res);
     res.writeHead(200, {

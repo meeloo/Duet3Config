@@ -46,7 +46,7 @@ export interface CameraConfig {
    * single unchanging <img>. False polls stills instead.
    */
   stream: boolean;
-  /** Stills per second when polling. */
+  /** Stills per second when polling; 0 means as fast as the camera manages. */
   fps: number;
   /** Reolink substream is a fraction of the size — 4K stills at 2fps are not. */
   quality: 'sub' | 'main';
@@ -59,7 +59,9 @@ export interface CameraCredentials {
 }
 
 export function defaultCameraConfig(): CameraConfig {
-  return { kind: 'auto', url: '', channel: 0, imageUrl: '', stream: false, fps: 2, quality: 'sub' };
+  // 10 rather than 2: with pipelined requests this is a rate a camera on the
+  // same LAN can actually hold, and 2 is a slideshow.
+  return { kind: 'auto', url: '', channel: 0, imageUrl: '', stream: false, fps: 10, quality: 'sub' };
 }
 
 export function defaultCredentials(): CameraCredentials {

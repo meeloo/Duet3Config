@@ -1033,3 +1033,5 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
   background: var(--tint-accent); border-bottom: 1px solid var(--border);
   font-size: 12px; color: var(--text-dim); }
 .install-hint span { flex: 1; min-width: 0; }
+.cam-fps { font-size: 11px; color: var(--text-faint); font-family: var(--mono);
+  white-space: nowrap; }

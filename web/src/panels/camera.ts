@@ -38,7 +38,18 @@ const PAD: Array<{ op: PtzOp; label: string; title: string } | null> = [
   { op: 'RightDown', label: '↘', title: 'Down and right' },
 ];
 
-const FPS_CHOICES = [0.5, 1, 2, 5];
+/**
+ * Rates offered. 0 means "as fast as they arrive" — with the pipeline that is
+ * the camera's own ceiling rather than a number anyone has to guess.
+ */
+const FPS_CHOICES: Array<{ value: number; label: string }> = [
+  { value: 1, label: '1' },
+  { value: 2, label: '2' },
+  { value: 5, label: '5' },
+  { value: 10, label: '10' },
+  { value: 15, label: '15' },
+  { value: 0, label: 'Max' },
+];
 
 /** Consecutive dropped frames before the picture is called stale. */
 const FRAME_ERROR_LIMIT = 3;
@@ -60,9 +71,12 @@ export class CameraPanel extends PanelElement {
   private showSetup = false;
   private live = false;
 
-  /** Which <img> is on screen; the other is the one being loaded into. */
-  private front = 0;
-  private timer: number | null = null;
+  /** Buffers cycle; whichever decodes a newer frame becomes the visible one. */
+  private streaming = false;
+  private timers: number[] = [];
+  /** Request counter, so an out-of-order arrival can be recognised and dropped. */
+  private seq = 0;
+  private shownSeq = -1;
   /** Consecutive frame failures; reset by any frame that arrives. */
   private frameErrors = 0;
   private presets: Array<{ id: number; name: string }> = [];
@@ -165,9 +179,39 @@ export class CameraPanel extends PanelElement {
     return snapshotUrl(this.config, this.creds, Date.now());
   }
 
+  /**
+   * Frames per second the pipeline is actually achieving.
+   *
+   * Shown, because the ceiling depends entirely on the camera and the network
+   * and there is otherwise no way to tell a setting that is too high from a
+   * camera that is struggling.
+   */
+  private measured = 0;
+  private frameTimes: number[] = [];
+
+  /** Milliseconds between frames the operator asked for; 0 means unpaced. */
+  private framePeriod(): number {
+    const fps = this.config.fps;
+    return fps > 0 ? 1000 / fps : 0;
+  }
+
+  /**
+   * Poll for stills, several requests deep.
+   *
+   * The obvious loop — request, wait, request — is what made this a slideshow:
+   * the wait is added *after* the frame arrives, so every frame costs a full
+   * round trip plus the interval, and a 2fps setting over a 150ms link runs at
+   * about 1.5. Requests are pipelined instead, so the round trip overlaps
+   * itself and the rate is set by what the camera can produce rather than by
+   * how far away it is.
+   *
+   * Three in flight, not more: Reolink's HTTP server has few workers, and
+   * queueing requests it cannot serve buys latency rather than frames.
+   */
   private startStream(): void {
     this.stopStream();
     this.frameErrors = 0;
+    this.frameTimes = [];
     if (!this.live || document.hidden) return;
 
     // A multipart MJPEG endpoint streams into one <img> on its own; polling it
@@ -178,55 +222,111 @@ export class CameraPanel extends PanelElement {
       return;
     }
 
-    const period = Math.max(100, 1000 / Math.max(0.1, this.config.fps));
-    const tick = () => {
-      const imgs = this.imgs();
-      if (imgs.length < 2) return;
-      // Dockview keeps a panel mounted when its tab is not the one showing, so
-      // without this the camera is still asked for a frame twice a second while
-      // nobody is looking at it. offsetParent is null exactly when an ancestor
-      // is display:none, which is how dockview hides it.
-      if (this.offsetParent === null) {
-        this.timer = window.setTimeout(tick, Math.max(period, 1000));
-        return;
-      }
-      const back = imgs[1 - this.front];
-      back.onload = () => {
-        const wasStale = this.frameErrors >= FRAME_ERROR_LIMIT;
-        this.frameErrors = 0;
-        if (wasStale) this.requestUpdate();
-        // Swap only once the new frame has decoded, so the visible image is
-        // never blank.
-        this.front = 1 - this.front;
-        for (const [i, img] of imgs.entries()) img.classList.toggle('showing', i === this.front);
-        this.timer = window.setTimeout(tick, period);
-      };
-      back.onerror = () => {
-        // A dropped frame is not a failure — cameras hiccup, and retrying is
-        // right. But retrying silently forever is how a black rectangle comes
-        // to mean both "night" and "the camera died half an hour ago", so once
-        // it is clearly not a hiccup, say so.
-        this.frameErrors++;
-        if (this.frameErrors === FRAME_ERROR_LIMIT) this.requestUpdate();
-        this.timer = window.setTimeout(tick, Math.max(period, 1000));
-      };
-      back.src = this.frameUrl();
+    const imgs = this.imgs();
+    // start() flips `live` and calls straight in, before the render that
+    // creates the buffers. Staying stopped is what lets updated() try again;
+    // claiming to be streaming with nothing to stream from would wedge it.
+    if (!imgs.length) return;
+
+    this.streaming = true;
+    const period = this.framePeriod();
+    imgs.forEach((img, index) => {
+      // Stagger the start so the buffers stay evenly spaced rather than all
+      // asking at once and then all idling together.
+      this.timers[index] = window.setTimeout(
+        () => this.pump(img, index),
+        (period * index) / Math.max(1, imgs.length),
+      );
+    });
+  }
+
+  /** One buffer's loop: request a frame, show it if it is the newest, repeat. */
+  private pump(img: HTMLImageElement, index: number): void {
+    if (!this.streaming) return;
+
+    // Dockview keeps a panel mounted when its tab is not the one showing, so
+    // without this the camera is still asked for frames while nobody is
+    // looking. offsetParent is null exactly when an ancestor is display:none.
+    if (document.hidden || this.offsetParent === null) {
+      this.timers[index] = window.setTimeout(() => this.pump(img, index), 1000);
+      return;
+    }
+
+    const seq = ++this.seq;
+    const started = Date.now();
+
+    img.onload = () => {
+      const wasStale = this.frameErrors >= FRAME_ERROR_LIMIT;
+      this.frameErrors = 0;
+      this.showFrame(img, seq);
+      if (wasStale) this.requestUpdate();
+      this.reschedule(img, index, started, false);
     };
-    tick();
+    img.onerror = () => {
+      // A dropped frame is not a failure — cameras hiccup, and retrying is
+      // right. But retrying silently forever is how a black rectangle comes
+      // to mean both "night" and "the camera died half an hour ago", so once
+      // it is clearly not a hiccup, say so.
+      this.frameErrors++;
+      if (this.frameErrors === FRAME_ERROR_LIMIT) this.requestUpdate();
+      this.reschedule(img, index, started, true);
+    };
+    img.src = this.frameUrl();
+  }
+
+  private reschedule(
+    img: HTMLImageElement,
+    index: number,
+    started: number,
+    failed: boolean,
+  ): void {
+    if (!this.streaming) return;
+    const buffers = Math.max(1, this.imgs().length);
+    // Each buffer only has to fire every buffers×period for the buffers
+    // together to hit the asked-for rate.
+    const target = failed
+      ? Math.max(1000, this.framePeriod())
+      : this.framePeriod() * buffers;
+    const wait = Math.max(0, target - (Date.now() - started));
+    this.timers[index] = window.setTimeout(() => this.pump(img, index), wait);
+  }
+
+  /**
+   * Put a decoded frame on screen, unless a newer one already is.
+   *
+   * With several requests in flight they can finish out of order, and showing
+   * a late arrival would jump the picture backwards in time.
+   */
+  private showFrame(img: HTMLImageElement, seq: number): void {
+    if (seq < this.shownSeq) return;
+    this.shownSeq = seq;
+    for (const other of this.imgs()) other.classList.toggle('showing', other === img);
+
+    const now = Date.now();
+    this.frameTimes.push(now);
+    if (this.frameTimes.length > 12) this.frameTimes.shift();
+    const span = now - this.frameTimes[0];
+    if (this.frameTimes.length > 2 && span > 0) {
+      const rate = ((this.frameTimes.length - 1) * 1000) / span;
+      // Only re-render when the readout would actually change.
+      if (Math.abs(rate - this.measured) > 0.4) {
+        this.measured = rate;
+        this.requestUpdate();
+      }
+    }
   }
 
   private stopStream(): void {
-    if (this.timer != null) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
+    this.streaming = false;
+    for (const t of this.timers) clearTimeout(t);
+    this.timers = [];
     for (const img of this.imgs()) img.onload = img.onerror = null;
   }
 
   protected override updated(): void {
     // The <img> pair only exists once a camera is live, so the stream cannot be
     // started before the first render that includes them.
-    if (this.live && this.timer == null && !this.config.stream) this.startStream();
+    if (this.live && !this.streaming && !this.config.stream) this.startStream();
   }
 
   // --- Commands -----------------------------------------------------------
@@ -358,7 +458,9 @@ export class CameraPanel extends PanelElement {
                 this.startStream();
               }}
             >
-              ${FPS_CHOICES.map((f) => html`<option value=${f} ?selected=${f === c.fps}>${f}</option>`)}
+              ${FPS_CHOICES.map(
+                (f) => html`<option value=${f.value} ?selected=${f.value === c.fps}>${f.label}</option>`,
+              )}
             </select>
           </span>
         </label>
@@ -580,6 +682,11 @@ export class CameraPanel extends PanelElement {
           ${probe && !probe.readable
             ? html`<span class="pill dim" title=${probe.note ?? ''}>blind</span>`
             : nothing}
+          ${this.live && this.measured > 0 && !this.config.stream
+            ? html`<span class="cam-fps" title="Frames per second actually arriving">
+                ${this.measured.toFixed(1)} fps
+              </span>`
+            : nothing}
           <span class="topbar-spacer"></span>
           ${this.live
             ? html`<button class="tiny" title="Full-resolution still in a new tab"
@@ -611,6 +718,7 @@ export class CameraPanel extends PanelElement {
           ${this.live
             ? html`
                 <img class="cam-frame showing" alt="Camera" />
+                <img class="cam-frame" alt="" />
                 <img class="cam-frame" alt="" />
                 ${this.frameErrors >= FRAME_ERROR_LIMIT
                   ? html`<span class="cam-stale">No frames from the camera</span>`
