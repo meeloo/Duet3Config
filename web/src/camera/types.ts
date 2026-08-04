@@ -3,13 +3,12 @@
 // Three browser facts shape everything here, and they are worth stating plainly
 // because they are the whole design:
 //
-//  1. **A browser cannot play RTSP.** Not with a flag, not with a codec — no
-//     engine implements it. A camera's RTSP URL is useless to this page. What
-//     *is* usable is the still-image endpoint nearly every IP camera also
-//     exposes, polled a couple of times a second, and multipart MJPEG where a
-//     camera offers it. For real RTSP video the answer is a bridge (go2rtc,
-//     MediaMTX) that re-publishes as MJPEG or HLS — whose URL can be pasted in
-//     here as a generic camera.
+//  1. **A browser cannot open a TCP socket.** That rules out RTSP and RTMP
+//     alike, whatever a camera's spec sheet lists: both are their own
+//     protocols on their own ports, and no browser API can reach them. What is
+//     reachable is anything delivered over HTTP — the still-image endpoint,
+//     multipart MJPEG, and HTTP-FLV, which is the same RTMP stream relayed by
+//     the camera's own web server. See flv.ts.
 //
 //  2. **An <img> is not subject to CORS.** The page can display an image from
 //     any origin; it just cannot read its pixels back. So the picture works
@@ -50,6 +49,15 @@ export interface CameraConfig {
   fps: number;
   /** Reolink substream is a fraction of the size — 4K stills at 2fps are not. */
   quality: 'sub' | 'main';
+  /**
+   * How to get the picture.
+   *
+   * 'auto' tries live video and drops to stills if it does not work, which is
+   * the only reliable test: whether HTTP-FLV plays depends on the firmware,
+   * the codec it is set to, and whether the camera lets this page read its
+   * stream — none of which can be asked in advance.
+   */
+  mode: 'auto' | 'video' | 'snapshot';
 }
 
 /** Kept out of the settings shared with the machine. */
@@ -61,7 +69,10 @@ export interface CameraCredentials {
 export function defaultCameraConfig(): CameraConfig {
   // 10 rather than 2: with pipelined requests this is a rate a camera on the
   // same LAN can actually hold, and 2 is a slideshow.
-  return { kind: 'auto', url: '', channel: 0, imageUrl: '', stream: false, fps: 10, quality: 'sub' };
+  return {
+    kind: 'auto', url: '', channel: 0, imageUrl: '', stream: false,
+    fps: 10, quality: 'sub', mode: 'auto',
+  };
 }
 
 export function defaultCredentials(): CameraCredentials {

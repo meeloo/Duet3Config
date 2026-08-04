@@ -127,7 +127,14 @@ function gzipDist() {
 const options = {
   // The parser worker is a separate entry: it is loaded by URL at runtime, so
   // it must exist as its own file rather than being inlined into the bundle.
-  entryPoints: { cnc: 'src/main.ts', 'parse-worker': 'src/viewer/parse-worker.ts' },
+  // flv-entry is the video demuxer, 270KB of it, imported at runtime only when
+  // live video is actually attempted — so the main bundle never carries it and
+  // a browser that cannot play video never fetches it.
+  entryPoints: {
+    cnc: 'src/main.ts',
+    'parse-worker': 'src/viewer/parse-worker.ts',
+    'flv-entry': 'src/camera/flv-entry.ts',
+  },
   outdir: 'dist',
   // esbuild captures process.cwd() when its module is loaded, which is before
   // the chdir above — so the paths in this object need the root spelled out.

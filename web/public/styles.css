@@ -1035,3 +1035,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .install-hint span { flex: 1; min-width: 0; }
 .cam-fps { font-size: 11px; color: var(--text-faint); font-family: var(--mono);
   white-space: nowrap; }
+/* Longhand rather than inset: the shorthand is Safari 14.1 and this has to
+   work on the old tablet too, even though video there falls back to stills. */
+.cam-video { position: absolute; top: 0; right: 0; bottom: 0; left: 0;
+  width: 100%; height: 100%; object-fit: contain; background: #000; }

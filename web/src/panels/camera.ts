@@ -16,6 +16,7 @@ import { loadSetting, saveSetting } from '../core/store.js';
 import { detectCamera } from '../camera/detect.js';
 import { DAY_NIGHT, ReolinkClient, SPOTLIGHT_MODES, rtspUrl, snapshotUrl } from '../camera/reolink.js';
 import type { PtzOp } from '../camera/reolink.js';
+import { flvUrl, playVideo, videoSupported, type VideoSession } from '../camera/flv.js';
 import {
   NO_CONTROLS,
   defaultCameraConfig,
@@ -79,6 +80,14 @@ export class CameraPanel extends PanelElement {
   private shownSeq = -1;
   /** Consecutive frame failures; reset by any frame that arrives. */
   private frameErrors = 0;
+
+  // --- Live video ---------------------------------------------------------
+  private video: VideoSession | null = null;
+  private usingVideo = false;
+  /** Why video is not on, when it was tried and did not work. */
+  private videoNote: string | null = null;
+  /** Guards the async start against updated() calling in again mid-attempt. */
+  private startingStream = false;
   private presets: Array<{ id: number; name: string }> = [];
 
   // Control state. Null means "not read" — blind mode never learns it.
@@ -137,7 +146,7 @@ export class CameraPanel extends PanelElement {
       }
       this.live = true;
       this.showSetup = false;
-      this.startStream();
+      void this.startStream();
     } catch (err) {
       this.error = (err as Error).message;
       this.live = false;
@@ -214,10 +223,96 @@ export class CameraPanel extends PanelElement {
    * Three in flight, not more: Reolink's HTTP server has few workers, and
    * queueing requests it cannot serve buys latency rather than frames.
    */
-  private startStream(): void {
-    this.stopStream();
+  private async startStream(): Promise<void> {
+    if (this.startingStream) return;
+    this.startingStream = true;
+    try {
+      this.stopStream();
+      if (!this.live || document.hidden) return;
+
+      // Video first where it is wanted and possible. Whether it works is not
+      // predictable from anything the camera says about itself, so it is
+      // simply attempted; the fallback costs a few seconds once.
+      if (this.wantsVideo() && (await this.tryVideo())) return;
+
+      this.startSnapshots();
+    } finally {
+      this.startingStream = false;
+    }
+  }
+
+  /** Is live video worth attempting at all? */
+  private wantsVideo(): boolean {
+    if (this.config.kind === 'generic' || this.config.mode === 'snapshot') return false;
+    // No Media Source Extensions means no video, and checking first is what
+    // keeps an iOS 12 iPad from downloading a 270KB demuxer it cannot use.
+    return videoSupported();
+  }
+
+  /**
+   * Try HTTP-FLV, and say whether it actually produced a picture.
+   *
+   * The <video> element has to exist before the player can attach to it, hence
+   * the render round trip. A failure here is ordinary — a camera set to H.265,
+   * a firmware without the endpoint, or a stream this origin is not allowed to
+   * read — so it resolves false rather than throwing.
+   */
+  private async tryVideo(): Promise<boolean> {
+    this.usingVideo = true;
+    this.videoNote = null;
+    this.requestUpdate();
+    await this.updateComplete;
+
+    const el = this.querySelector<HTMLVideoElement>('.cam-video');
+    if (!el) {
+      this.usingVideo = false;
+      return false;
+    }
+
+    return new Promise<boolean>((resolve) => {
+      let decided = false;
+      const settle = (ok: boolean, note: string | null): void => {
+        if (decided) return;
+        decided = true;
+        if (!ok) {
+          this.usingVideo = false;
+          this.videoNote = note;
+          this.video?.stop();
+          this.video = null;
+        }
+        this.requestUpdate();
+        resolve(ok);
+      };
+
+      playVideo(el, flvUrl(this.config, this.creds), {
+        onPlaying: () => settle(true, null),
+        onError: (message) => {
+          if (!decided) {
+            settle(false, message);
+            return;
+          }
+          // It played and then stopped. Go back to stills rather than leaving
+          // a frozen frame that looks like a working camera.
+          this.videoNote = `Video stopped: ${message}`;
+          this.usingVideo = false;
+          this.video?.stop();
+          this.video = null;
+          this.requestUpdate();
+          this.startSnapshots();
+        },
+      })
+        .then((session) => {
+          if (decided && !this.usingVideo) session.stop();
+          else this.video = session;
+        })
+        .catch((err: Error) => settle(false, err.message));
+    });
+  }
+
+  private startSnapshots(): void {
     this.frameErrors = 0;
     this.frameTimes = [];
+    this.measured = 0;
     if (!this.live || document.hidden) return;
 
     // A multipart MJPEG endpoint streams into one <img> on its own; polling it
@@ -324,6 +419,9 @@ export class CameraPanel extends PanelElement {
   }
 
   private stopStream(): void {
+    this.video?.stop();
+    this.video = null;
+    this.usingVideo = false;
     this.streaming = false;
     for (const t of this.timers) clearTimeout(t);
     this.timers = [];
@@ -333,7 +431,9 @@ export class CameraPanel extends PanelElement {
   protected override updated(): void {
     // The <img> pair only exists once a camera is live, so the stream cannot be
     // started before the first render that includes them.
-    if (this.live && !this.streaming && !this.config.stream) this.startStream();
+    if (this.live && !this.streaming && !this.usingVideo && !this.startingStream && !this.config.stream) {
+      void this.startStream();
+    }
   }
 
   // --- Commands -----------------------------------------------------------
@@ -454,6 +554,26 @@ export class CameraPanel extends PanelElement {
                 </span>
               </label>
             `}
+
+        ${c.kind !== 'generic'
+          ? html`
+              <label class="param">
+                <span class="param-label">Picture</span>
+                <span class="param-input">
+                  <select
+                    @change=${(e: Event) => {
+                      this.config = { ...c, mode: (e.target as HTMLSelectElement).value as CameraConfig['mode'] };
+                      this.requestUpdate();
+                    }}
+                  >
+                    <option value="auto" ?selected=${c.mode === 'auto'}>Video if possible</option>
+                    <option value="video" ?selected=${c.mode === 'video'}>Video only</option>
+                    <option value="snapshot" ?selected=${c.mode === 'snapshot'}>Stills only</option>
+                  </select>
+                </span>
+              </label>
+            `
+          : nothing}
 
         <label class="param">
           <span class="param-label">Frames / second</span>
@@ -689,7 +809,10 @@ export class CameraPanel extends PanelElement {
           ${probe && !probe.readable
             ? html`<span class="pill dim" title=${probe.note ?? ''}>blind</span>`
             : nothing}
-          ${this.live && this.measured > 0 && !this.config.stream
+          ${this.live && this.usingVideo
+            ? html`<span class="pill good" title="Live H.264 over HTTP-FLV">video</span>`
+            : nothing}
+          ${this.live && !this.usingVideo && this.measured > 0 && !this.config.stream
             ? html`<span class="cam-fps" title="Frames per second actually arriving">
                 ${this.measured.toFixed(1)} fps
               </span>`
@@ -719,10 +842,18 @@ export class CameraPanel extends PanelElement {
 
         ${this.error ? html`<div class="warn-banner">${this.error}</div>` : nothing}
         ${probe?.note && !this.showSetup ? html`<div class="cam-hint">${probe.note}</div>` : nothing}
+        ${this.videoNote && !this.showSetup
+          ? html`<div class="cam-hint">
+              ${this.config.mode === 'video' ? 'Video failed' : 'Showing stills'} — ${this.videoNote}
+            </div>`
+          : nothing}
         ${this.showSetup ? this.renderSetup() : nothing}
 
         <div class="cam-view ${this.live ? '' : 'idle'}">
-          ${this.live
+          ${this.live && this.usingVideo
+            ? html`<video class="cam-video" muted playsinline autoplay></video>`
+            : nothing}
+          ${this.live && !this.usingVideo
             ? html`
                 <img class="cam-frame showing" alt="Camera" />
                 <img class="cam-frame" alt="" />

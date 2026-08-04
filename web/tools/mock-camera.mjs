@@ -17,12 +17,31 @@
 // picture makes it obvious at a glance whether the panel is actually polling.
 
 import { createServer } from 'node:http';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const PORT = Number(process.argv[2] ?? 8090);
 const CORS = process.argv.includes('--cors');
 
 /** Milliseconds to sit on a snapshot before answering, to imitate a LAN camera. */
 const LATENCY = Number(process.env.MOCK_LATENCY ?? 0);
+
+/**
+ * A real H.264 FLV, served the way the camera serves one.
+ *
+ * Generated with ffmpeg rather than faked: the point of testing this path is
+ * that mpegts.js can demux what arrives and hand it to Media Source
+ * Extensions, and a stub that is not actually H.264 in an FLV container
+ * proves none of that.
+ */
+const FLV_PATH = fileURLToPath(new URL('fixtures/test-stream.flv', import.meta.url));
+let FLV = null;
+try {
+  FLV = readFileSync(FLV_PATH);
+} catch {
+  // Only the /flv endpoint needs it; everything else runs without.
+  console.log('  (no FLV fixture — run tools/make-flv-fixture.mjs for the video path)');
+}
 
 const USER = 'admin';
 const PASSWORD = 'cnc';
@@ -185,6 +204,35 @@ const server = createServer(async (req, res) => {
   // A debug hook for the test harness: what has the camera actually been told?
   if (url.pathname === '/_state') {
     return sendJson(res, state);
+  }
+
+  // HTTP-FLV: the RTMP stream, wrapped in HTTP so a browser can fetch it.
+  // Reolink's own URL shape, port and app included.
+  if (url.pathname === '/flv') {
+    if (!authOk(url)) {
+      cors(res);
+      res.writeHead(401);
+      return res.end('unauthorized');
+    }
+    if (!FLV) {
+      res.writeHead(503);
+      return res.end('no FLV fixture built');
+    }
+    cors(res);
+    res.writeHead(200, { 'Content-Type': 'video/x-flv', 'Cache-Control': 'no-store' });
+    // Paced in chunks rather than dumped at once, so it behaves like a live
+    // stream — which is what the player is configured for.
+    let at = 0;
+    const CHUNK = 32 * 1024;
+    const pump = () => {
+      if (res.writableEnded || at >= FLV.length) return res.end();
+      res.write(FLV.subarray(at, at + CHUNK));
+      at += CHUNK;
+      setTimeout(pump, 25);
+    };
+    req.on('close', () => { at = FLV.length; });
+    pump();
+    return;
   }
 
   if (url.pathname !== '/cgi-bin/api.cgi') {
