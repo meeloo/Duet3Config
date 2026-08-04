@@ -175,7 +175,13 @@ export class CameraPanel extends PanelElement {
   }
 
   private frameUrl(): string {
-    if (this.config.kind === 'generic') return this.config.imageUrl;
+    if (this.config.kind === 'generic') {
+      const url = this.config.imageUrl;
+      if (this.config.stream) return url; // one long-lived request, never reissued
+      // A still fetched over and over needs a cache-buster of its own, or the
+      // browser answers every request with the first frame it ever saw.
+      return `${url}${url.includes('?') ? '&' : '?'}_=${Date.now()}`;
+    }
     return snapshotUrl(this.config, this.creds, Date.now());
   }
 
@@ -215,8 +221,9 @@ export class CameraPanel extends PanelElement {
     if (!this.live || document.hidden) return;
 
     // A multipart MJPEG endpoint streams into one <img> on its own; polling it
-    // would throw away the connection every frame.
-    if (this.config.stream || this.config.kind === 'generic') {
+    // would throw away the connection every frame. Only ever a generic camera:
+    // Reolink's snapshot endpoint returns one image and would freeze on it.
+    if (this.config.kind === 'generic' && this.config.stream) {
       const [a] = this.imgs();
       if (a && a.src !== this.config.imageUrl) a.src = this.frameUrl();
       return;
