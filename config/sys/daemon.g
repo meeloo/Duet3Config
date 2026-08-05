@@ -7,6 +7,14 @@ while true
     if {!exists(global.dustShoeEngaged)}
         G4 P500
 
+    ; On RRF 3.7 the tracking is an M581.1 expression trigger (trigger2.g) and
+    ; this loop must keep out of its way — two things moving U from different
+    ; channels would fight, each undoing the other's correction. Idles slowly
+    ; rather than exiting, so flipping the switch back takes effect without a
+    ; restart.
+    elif {exists(global.dustShoeUseTrigger) && global.dustShoeUseTrigger}
+        G4 P1000
+
     ; Never move an unhomed axis
     elif {!move.axes[3].homed}
         G4 P200
@@ -21,12 +29,23 @@ while true
         var deltaZ   = var.currentZ - global.dustShoePrevZ
 
         if {abs(var.deltaZ) > 0.1}
-            var targetU = move.axes[3].machinePosition - var.deltaZ
+            var wantU = move.axes[3].machinePosition - var.deltaZ
+            var targetU = var.wantU
             if {var.targetU < move.axes[3].min}
                 set var.targetU = move.axes[3].min
             if {var.targetU > move.axes[3].max}
                 set var.targetU = move.axes[3].max
             G53 G1 U{var.targetU} F8000
-            set global.dustShoePrevZ = var.currentZ
+            ; Compared before the move, not after: once the G1 is issued
+            ; machinePosition is whatever the axis has reached since, and
+            ; measuring the clamp against that says nothing about the clamp.
+            if {var.targetU == var.wantU}
+                set global.dustShoePrevZ = var.currentZ
+            else
+                ; Only credit the Z that was actually compensated for, or the
+                ; shoe never recovers once the axis comes off its stop.
+                set global.dustShoePrevZ = {var.currentZ - (var.wantU - var.targetU)}
+                if {exists(global.dustShoeSaturated)}
+                    set global.dustShoeSaturated = true
 
         G4 P50
