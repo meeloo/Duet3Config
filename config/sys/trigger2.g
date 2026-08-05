@@ -30,7 +30,13 @@ var deltaZ = {var.nowZ - global.dustShoePrevZ}
 ; The shoe hangs off the Z carriage, so U moves opposite to Z to keep the
 ; bristles at the same height above the work.
 var wantU = {move.axes[3].machinePosition - var.deltaZ}
-var gotU  = {constrain(var.wantU, move.axes[3].min, move.axes[3].max)}
+; min(max(…)) rather than a clamp function: RRF has no constrain(), which this
+; line claimed it did — "unknown function" at the open bracket, every firing.
+; The same shape is already in dustShoeEngage.g, which is where it should have
+; been copied from in the first place.
+var loU   = {move.axes[3].min}
+var hiU   = {move.axes[3].max}
+var gotU  = {min(max(var.wantU, var.loU), var.hiU)}
 
 G53 G1 U{var.gotU} F8000
 

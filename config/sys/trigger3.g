@@ -15,7 +15,17 @@
 ; would turn a cosmetic problem into a scrapped part. The operator is told, and
 ; can choose.
 
-M118 P0 S"Dust shoe: out of travel — U has hit its limit and the shoe is no longer following Z. Extraction is compromised until Z comes back within range."
+; The numbers, not just the complaint.
+;
+; The first time this fired, U was reported as 30 on an axis that travels 0..70
+; and the message gave no way to tell whether the axis really was at a stop or
+; the trigger was wrong — which cost a round trip to find out. A diagnostic that
+; needs a follow-up question is half a diagnostic.
+;
+; machinePosition is what the soft limits are in; userPosition is what the
+; engage macro's "U=30" was in. When those two disagree the offset is the
+; answer, and this line shows both.
+M118 P0 S{"Dust shoe: out of travel — U is at " ^ move.axes[3].machinePosition ^ " (work " ^ move.axes[3].userPosition ^ ") against limits " ^ move.axes[3].min ^ ".." ^ move.axes[3].max ^ ". The shoe is no longer following Z; extraction is compromised until Z comes back within range."}
 
 ; Left set so the state is visible in the object model and in Axis Control
 ; after the message has scrolled away. dustShoeEngage.g clears it.

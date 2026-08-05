@@ -9,4 +9,8 @@ set global.dustShoePrevZ   = move.axes[2].machinePosition
 if {exists(global.dustShoeSaturated)}
 	set global.dustShoeSaturated = false
 set global.dustShoeEngaged = true
-echo "Dust shoe engaged at U=" ^ var.targetU
+; Both coordinates. targetU is a work position, and reporting only that made
+; "engaged at U=30" look like it sat mid-travel on an axis whose limits are
+; machine coordinates — which is exactly the confusion that made the saturation
+; warning unreadable.
+echo "Dust shoe engaged at U=" ^ var.targetU ^ " (machine " ^ move.axes[3].machinePosition ^ ", limits " ^ move.axes[3].min ^ ".." ^ move.axes[3].max ^ ")"
