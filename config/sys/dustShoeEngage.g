@@ -13,4 +13,4 @@ set global.dustShoeEngaged = true
 ; "engaged at U=30" look like it sat mid-travel on an axis whose limits are
 ; machine coordinates — which is exactly the confusion that made the saturation
 ; warning unreadable.
-echo "Dust shoe engaged at U=" ^ var.targetU ^ " (machine " ^ move.axes[3].machinePosition ^ ", limits " ^ move.axes[3].min ^ ".." ^ move.axes[3].max ^ ")"
+echo "Dust shoe at U" ^ var.targetU ^ " (machine " ^ move.axes[3].machinePosition ^ ", limits " ^ move.axes[3].min ^ ".." ^ move.axes[3].max ^ ")"

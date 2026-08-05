@@ -25,7 +25,7 @@
 ; machinePosition is what the soft limits are in; userPosition is what the
 ; engage macro's "U=30" was in. When those two disagree the offset is the
 ; answer, and this line shows both.
-M118 P0 S{"Dust shoe: out of travel — U is at " ^ move.axes[3].machinePosition ^ " (work " ^ move.axes[3].userPosition ^ ") against limits " ^ move.axes[3].min ^ ".." ^ move.axes[3].max ^ ". The shoe is no longer following Z; extraction is compromised until Z comes back within range."}
+M118 P0 S{"Dust shoe out of travel: U at " ^ move.axes[3].machinePosition ^ " (work " ^ move.axes[3].userPosition ^ "), limits " ^ move.axes[3].min ^ ".." ^ move.axes[3].max ^ ". Not following Z."}
 
 ; Left set so the state is visible in the object model and in Axis Control
 ; after the message has scrolled away. dustShoeEngage.g clears it.
