@@ -15,6 +15,12 @@
 ; do". The shoe also follows sooner, because the check happens at the
 ; firmware's own rate rather than at whatever the daemon's G4 P50 grants it.
 
+; Nothing to follow while the machine is halted, and the G1 below would be
+; refused anyway. Same reasoning as the guard in daemon.g, which learned it the
+; expensive way.
+if {state.status == "halted" || state.status == "off"}
+	M99
+
 ; The Z this move is compensating for, sampled once. Z is still moving, and
 ; taking it twice would compensate for one position and record another —
 ; leaving a permanent offset that never gets corrected.

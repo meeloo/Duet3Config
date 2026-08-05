@@ -3,6 +3,20 @@
 ; while true loop — the G4 P50 at the bottom controls the actual iteration rate.
 
 while true
+    ; Stand down while the machine is halted.
+    ;
+    ; After M112 the firmware refuses everything this file does — including the
+    ; G4 that paces the loop, which comes back as "Error: G4: Machine is halted".
+    ; Every branch below ends in a G4, so with nothing to pace it the loop spins
+    ; as fast as the firmware will run it, one error per turn, and the board has
+    ; better things to do with its output buffers than fill them with the same
+    ; complaint. The web interface stopped answering at all.
+    ;
+    ; Leaving is the whole fix: the firmware restarts daemon.g every few seconds,
+    ; so this idles for free and picks straight back up after M999 or a reset.
+    if {state.status == "halted" || state.status == "off"}
+        break
+
     ; Wait for globals to exist (firmware may start daemon before config.g completes)
     if {!exists(global.dustShoeEngaged)}
         G4 P500
