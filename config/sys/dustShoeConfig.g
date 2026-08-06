@@ -54,12 +54,20 @@ global dustShoeUseTrigger = true
 ; from the console puts the shoe straight back on the old single-queue path.
 ; No file to edit, no restart — which matters because the thing that goes
 ; wrong with a trigger is a trigger that throws on every firing.
+; exists(move.queue[1]) rather than #move.queue > 1: exists() answers for the
+; whole path, so it is false on a build with no second queue AND on one with no
+; move.queue at all. The array-length operator would have thrown on the second
+; case, and a throw here aborts the rest of config.g — taking M501 and the
+; stored parameters with it, at boot, with nobody connected to see why.
 global dustShoeQueue = 0
-if {exists(move.queue) && #move.queue > 1}
+if {exists(move.queue[1])}
 	set global.dustShoeQueue = 1
-	echo "Dust shoe: tracking on movement queue 1, concurrent with the job"
-else
-	echo "Dust shoe: single movement queue — the shoe follows Z one move behind"
+
+; Read it back with `echo global.dustShoeQueue` — this is deliberately a global
+; and not just a message. config.g runs before any browser has connected, so
+; anything echoed here goes to a channel nobody is listening on and is gone by
+; the time the console opens. A value in the object model is still there.
+echo "Dust shoe: movement queue " ^ global.dustShoeQueue
 
 if {global.dustShoeUseTrigger}
 	; Trigger 2: the shoe has fallen behind Z by more than the dead band.
