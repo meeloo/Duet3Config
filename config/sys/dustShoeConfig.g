@@ -24,12 +24,14 @@ global dustShoeSaturated  = false
 ;
 ; true  — M581.1 expression triggers (RRF 3.7 and later). The firmware watches
 ;         the expression and fires trigger2.g when it becomes true.
-; false — the polling loop in daemon.g, which is what RRF 3.6 and earlier need.
+; false — nothing. The polling loop this used to fall back to has been taken
+;         out of daemon.g: with the tracking in its own motion system, a second
+;         thing reaching for U from motion system 0 does not idle quietly, it
+;         reports "Drive U is already used by a different motion system" once
+;         per move for as long as the machine is on.
 ;
-; Left as a switch rather than detected, because getting it wrong in the
-; direction of "assume 3.7" on a board that has been rolled back would leave
-; the shoe not tracking at all, with nothing on screen saying so. Flip it by
-; hand if you go back to 3.6.
+; So on a firmware without M581.1 there is now no tracking at all rather than a
+; slower kind. The loop is in daemon.g's history if it is ever needed back.
 global dustShoeUseTrigger = true
 
 ; Which movement queue the shoe's own moves go in.
