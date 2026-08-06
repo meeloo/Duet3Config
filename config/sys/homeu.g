@@ -10,6 +10,18 @@ G1 H1 U{move.axes[3].max*2} F300 ; move slowly to axis endstop once more (second
 G92 U{move.axes[3].max} ; Set Home Position
 G90 ; absolute positioning
 
+; Hand U back.
+;
+; "Once a motion system starts using an axis or extruder, it owns it until it
+; is released, usually with M400" — so homing U claims the axis for whichever
+; motion system ran this file, and keeps it. The dust shoe's tracking runs in a
+; different motion system when global.dustShoeQueue is 1, and without this line
+; its first correction fails with "Drive U is already used by a different
+; motion system" and the shoe stops following Z until the next reboot.
+;
+; Harmless with a single motion system: M400 is then just a wait.
+M400
+
 ;M400 ; Wait for current moves to finish 
 ;M913 U70 ; drop motor current to 70% 
 ;M400 

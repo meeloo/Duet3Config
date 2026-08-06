@@ -22,5 +22,10 @@ G1 H1 Z{move.axes[2].max*2} F100 ; move slowly to axis endstop once more (second
 G92 X{move.axes[0].min} Y{move.axes[1].min} Z{move.axes[2].max} U{move.axes[3].max} ; Set Home Position
 G90 ; absolute positioning
 
+; Hand the axes back — U is the one that matters. See the note in homeu.g:
+; an axis stays owned by the motion system that moved it until an M400
+; releases it, and the dust shoe tracks from a different motion system.
+M400
+
 
 

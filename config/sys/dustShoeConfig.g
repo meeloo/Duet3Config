@@ -45,23 +45,29 @@ global dustShoeUseTrigger = true
 ; selects it (M596) has its moves planned independently of queue 0. The shoe
 ; then moves WHILE Z moves rather than after it.
 ;
-; OFF — on a board that has the second queue and still cannot use it.
+; Ownership is the thing to get right, not the queue.
 ;
-; This one reports move.queue[1], so detection turned it on, and then every Z
-; move produced "Drive U is already used by a different motion system" from
-; trigger2.g. An axis belongs to whichever motion system last moved it until
-; that system gives it back, and system 0 is holding U: homeu.g and homeall.g
-; both drive U and neither ends with an M400, so it is claimed from the first
-; homing onwards. The current tool carries a U offset as well (atcProbeZ.g sets
-; one with G10 L1), and M400's release explicitly skips axes the current tool
-; needs — so adding M400 to the homing files may not be enough to free it.
+; "At any time, each motion system owns a set of physical axes and extruders.
+; No other motion system can use those axes/extruders or that tool until the
+; owning motion system releases it. Once a motion system starts using an axis
+; or extruder, it owns it until it is released, usually with M400."
 ;
-; Kept rather than deleted, because the blockage is ownership and not queues:
-; `set global.dustShoeQueue = 1` from the console tries it again once U is
-; genuinely free. Detecting the queue and switching it on by itself is what
-; must not come back — that reintroduces an error on every Z move at the next
-; restart, which is how this was found.
+; That is why the first attempt failed with "Drive U is already used by a
+; different motion system" on every Z move: homeall.g and homeu.g both drive U
+; and neither ended with an M400, so motion system 0 held the axis from the
+; first homing onwards and the tracking — running in system 1 — could never
+; take it. Both files release it now.
+;
+; The tool exception in M400 ("except for axes needed by the current tool")
+; does not apply here: the spindle tools are declared M563 P1 R0 S"…" with no
+; axis mapping at all, so no tool needs U.
+;
+; `set global.dustShoeQueue = 0` from the console still forces the old
+; single-queue path without editing a file or restarting — worth keeping,
+; because RRF's own documentation calls multiple motion systems experimental.
 global dustShoeQueue = 0
+if {exists(move.queue[1])}
+	set global.dustShoeQueue = 1
 
 ; Read it back with `echo global.dustShoeQueue` — this is deliberately a global
 ; and not just a message. config.g runs before any browser has connected, so
