@@ -21,6 +21,12 @@
 if {state.status == "halted" || state.status == "off"}
 	M99
 
+; What this firing actually saw. See dustShoeDebug in dustShoeConfig.g: the gap
+; between the two Z figures says whether the trigger fired while Z was still
+; travelling, and whether userPosition is holding the endpoint of the move.
+if {global.dustShoeDebug}
+	echo "trig Zm=" ^ move.axes[2].machinePosition ^ " Zu=" ^ move.axes[2].userPosition ^ " prev=" ^ global.dustShoePrevZ ^ " Um=" ^ move.axes[3].machinePosition ^ " " ^ state.status
+
 ; The Z this move is compensating for, sampled once. Z is still moving, and
 ; taking it twice would compensate for one position and record another —
 ; leaving a permanent offset that never gets corrected.

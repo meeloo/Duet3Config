@@ -34,6 +34,17 @@ global dustShoeSaturated  = false
 ; slower kind. The loop is in daemon.g's history if it is ever needed back.
 global dustShoeUseTrigger = true
 
+; Report what each firing of trigger2.g actually saw. Off by default — one line
+; per correction is a lot of console. `set global.dustShoeDebug = true` turns it
+; on without editing a file or restarting.
+;
+; It prints both Z positions, because the difference between them is the whole
+; question: machinePosition updates while the axis moves, userPosition does not
+; move until the move completes — which means that during a move userPosition
+; is the ENDPOINT. If that holds, the shoe can be sent to where Z is going in
+; one move instead of chasing where Z has been in 0.1mm steps.
+global dustShoeDebug = false
+
 ; Tried and disproved: a second movement queue does not fix the lag.
 ;
 ; The theory was that the shoe waits because trigger2.g's G1 goes on the end of
