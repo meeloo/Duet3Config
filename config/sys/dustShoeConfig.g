@@ -84,6 +84,51 @@ global dustShoeFires = 0
 ; and a second claimant on the axis does not idle quietly, it errors on every
 ; move (daemon.g). The M400s in homeall.g and homeu.g are still there — they
 ; are good hygiene either way — and daemon.g stays empty.
+;
+; --- What was actually measured, so none of it is guessed at twice ----------
+;
+; The trigger is not the problem. It fires 0.3mm into a 50mm move with the
+; machine still busy, reading live positions. machinePosition and userPosition
+; are BOTH live and differ only by the work offset — neither one holds the
+; endpoint of the move, so there is no look-ahead to be had from the object
+; model.
+;
+; dustShoeFires said 1 for a whole 50mm jog, and U ended clamped at its
+; maximum: a single correction attempting the entire delta, arriving after Z
+; had stopped. So the shoe gets one chance per Z move and it is always late.
+; No dead band, trigger rate, motion system or polling interval changes that —
+; they all sit downstream of it.
+;
+; The only software shape that can work is U travelling in the same G1 as Z,
+; because that is the one place in RRF where two axes are guaranteed to
+; interpolate together. It needs every source of Z motion to emit the U term:
+; the jog buttons, these macros, and the Fusion post. Rejected as too easy to
+; get silently wrong in one of the three.
+;
+; Coupled kinematics looked like the answer and is not, for a reason specific
+; to this machine rather than to the idea. M669 exposes the movement
+; coefficient matrix, so "U motor = U axis - Z axis" would make the shoe hold
+; station inside the planner with no tracking at all:
+;
+;   M669 K0 X1:0:0:0 Y0:1:0:0 Z0:0:1:0 U0:0:-1:1
+;
+; But a tool change takes Z from atcRetractZ (135) down to atcDropEndZ (10),
+; and holding station across 125mm of Z needs 125mm of U motor travel. U has
+; 70. Soft limits are checked on the AXIS, not the motor, so nothing would stop
+; it: the motor runs out and the shoe is dragged the remaining 55mm into the
+; pocket while the spindle is threading a tool. Leaving the coupling on is
+; therefore not an option, and switching it off per tool change means a runtime
+; kinematics change inside tfree/tpre.
+;
+; Which is the real conclusion: one 70mm axis is being asked to do two jobs
+; with incompatible ranges — hold station against 125mm of Z travel, and park
+; clear of the pockets on demand. That is a mounting problem, not a firmware
+; one. A shoe carried by the carriage above the Z travel needs no tracking and
+; keeps U for parking alone.
+;
+; Until then this is the resting state and it works: the shoe follows Z one
+; move behind, saturates gracefully with a message when it runs out of travel,
+; and retracts for tool changes exactly as it always did.
 
 if {global.dustShoeUseTrigger}
 	; Trigger 2: the shoe has fallen behind Z by more than the dead band.
