@@ -15,7 +15,7 @@ G90 ; absolute positioning
 ; "Once a motion system starts using an axis or extruder, it owns it until it
 ; is released, usually with M400" — so homing U claims the axis for whichever
 ; motion system ran this file, and keeps it. The dust shoe's tracking runs in a
-; different motion system when global.dustShoeQueue is 1, and without this line
+; different motion system if it is ever run there again, and without this line
 ; its first correction fails with "Drive U is already used by a different
 ; motion system" and the shoe stops following Z until the next reboot.
 ;

@@ -34,48 +34,30 @@ global dustShoeSaturated  = false
 ; slower kind. The loop is in daemon.g's history if it is ever needed back.
 global dustShoeUseTrigger = true
 
-; Which movement queue the shoe's own moves go in.
+; Tried and disproved: a second movement queue does not fix the lag.
 ;
-; This is the whole latency question, and it is not about how fast the trigger
-; fires. A G1 issued from trigger2.g is appended to the same movement queue as
-; the Z move that fired it, and RRF runs a queue strictly in order — so the
-; shoe cannot start moving until the Z move it is compensating for has
-; finished. Polling faster never had a chance of fixing that; neither did the
-; daemon before it. The move was never late, it was behind.
+; The theory was that the shoe waits because trigger2.g's G1 goes on the end of
+; the same movement queue as the Z move that fired it, and a queue runs in
+; order. RRF 3.5+ can plan a second queue independently (M596), so the shoe
+; should have been able to move while Z did.
 ;
-; RRF 3.5 and later can have a second movement queue, and a channel that
-; selects it (M596) has its moves planned independently of queue 0. The shoe
-; then moves WHILE Z moves rather than after it.
+; It does not. With the trigger running in motion system 1 and U released to it
+; properly, U still moves only after Z has finished — exactly as before. So the
+; queue was never the constraint.
 ;
-; Ownership is the thing to get right, not the queue.
+; What is left, most likely: the trigger reads move.axes[2].machinePosition,
+; and if that only updates when a move completes then the expression cannot
+; become true until Z has already arrived. The information is late, not the
+; motion, and nothing about queues, trigger rates or polling intervals can
+; make late information early. It is also why swapping the daemon for a trigger
+; changed nothing measurable.
 ;
-; "At any time, each motion system owns a set of physical axes and extruders.
-; No other motion system can use those axes/extruders or that tool until the
-; owning motion system releases it. Once a motion system starts using an axis
-; or extruder, it owns it until it is released, usually with M400."
-;
-; That is why the first attempt failed with "Drive U is already used by a
-; different motion system" on every Z move: homeall.g and homeu.g both drive U
-; and neither ended with an M400, so motion system 0 held the axis from the
-; first homing onwards and the tracking — running in system 1 — could never
-; take it. Both files release it now.
-;
-; The tool exception in M400 ("except for axes needed by the current tool")
-; does not apply here: the spindle tools are declared M563 P1 R0 S"…" with no
-; axis mapping at all, so no tool needs U.
-;
-; `set global.dustShoeQueue = 0` from the console still forces the old
-; single-queue path without editing a file or restarting — worth keeping,
-; because RRF's own documentation calls multiple motion systems experimental.
-global dustShoeQueue = 0
-if {exists(move.queue[1])}
-	set global.dustShoeQueue = 1
-
-; Read it back with `echo global.dustShoeQueue` — this is deliberately a global
-; and not just a message. config.g runs before any browser has connected, so
-; anything echoed here goes to a channel nobody is listening on and is gone by
-; the time the console opens. A value in the object model is still there.
-echo "Dust shoe: movement queue " ^ global.dustShoeQueue
+; Two failures were paid for on the way, both worth remembering because they
+; are the cost of this feature rather than of this idea: an axis stays owned by
+; the motion system that moved it until an M400 releases it (homing kept U),
+; and a second claimant on the axis does not idle quietly, it errors on every
+; move (daemon.g). The M400s in homeall.g and homeu.g are still there — they
+; are good hygiene either way — and daemon.g stays empty.
 
 if {global.dustShoeUseTrigger}
 	; Trigger 2: the shoe has fallen behind Z by more than the dead band.
