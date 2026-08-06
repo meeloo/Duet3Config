@@ -45,23 +45,23 @@ global dustShoeUseTrigger = true
 ; selects it (M596) has its moves planned independently of queue 0. The shoe
 ; then moves WHILE Z moves rather than after it.
 ;
-; Detected rather than assumed, because the secondary queue is build-dependent
-; — "some builds of RRF have a secondary movement queue", per M595's own
-; documentation. On a build without one this stays 0 and everything behaves
-; exactly as it does today, which is the right way to be wrong.
+; OFF — on a board that has the second queue and still cannot use it.
 ;
-; If the second queue turns out to misbehave, `set global.dustShoeQueue = 0`
-; from the console puts the shoe straight back on the old single-queue path.
-; No file to edit, no restart — which matters because the thing that goes
-; wrong with a trigger is a trigger that throws on every firing.
-; exists(move.queue[1]) rather than #move.queue > 1: exists() answers for the
-; whole path, so it is false on a build with no second queue AND on one with no
-; move.queue at all. The array-length operator would have thrown on the second
-; case, and a throw here aborts the rest of config.g — taking M501 and the
-; stored parameters with it, at boot, with nobody connected to see why.
+; This one reports move.queue[1], so detection turned it on, and then every Z
+; move produced "Drive U is already used by a different motion system" from
+; trigger2.g. An axis belongs to whichever motion system last moved it until
+; that system gives it back, and system 0 is holding U: homeu.g and homeall.g
+; both drive U and neither ends with an M400, so it is claimed from the first
+; homing onwards. The current tool carries a U offset as well (atcProbeZ.g sets
+; one with G10 L1), and M400's release explicitly skips axes the current tool
+; needs — so adding M400 to the homing files may not be enough to free it.
+;
+; Kept rather than deleted, because the blockage is ownership and not queues:
+; `set global.dustShoeQueue = 1` from the console tries it again once U is
+; genuinely free. Detecting the queue and switching it on by itself is what
+; must not come back — that reintroduces an error on every Z move at the next
+; restart, which is how this was found.
 global dustShoeQueue = 0
-if {exists(move.queue[1])}
-	set global.dustShoeQueue = 1
 
 ; Read it back with `echo global.dustShoeQueue` — this is deliberately a global
 ; and not just a message. config.g runs before any browser has connected, so
