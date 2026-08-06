@@ -21,6 +21,8 @@
 if {state.status == "halted" || state.status == "off"}
 	M99
 
+set global.dustShoeFires = {global.dustShoeFires + 1}
+
 ; What this firing actually saw. See dustShoeDebug in dustShoeConfig.g: the gap
 ; between the two Z figures says whether the trigger fired while Z was still
 ; travelling, and whether userPosition is holding the endpoint of the move.

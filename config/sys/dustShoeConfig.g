@@ -45,6 +45,21 @@ global dustShoeUseTrigger = true
 ; one move instead of chasing where Z has been in 0.1mm steps.
 global dustShoeDebug = false
 
+; How many times trigger2.g has run since the shoe was engaged.
+;
+; A counter rather than counting console lines, because console lines are not
+; evidence: a trigger firing every 0.1mm of a 50mm move would emit hundreds of
+; messages in a couple of seconds, and whatever the board's output buffers drop
+; is invisible. The count survives regardless — `echo global.dustShoeFires`
+; after a jog says exactly how many corrections were attempted.
+;
+; The number to compare it against: a 50mm Z move with a 0.1mm dead band should
+; fire around 500 times if the trigger re-arms during the move, and once if
+; trigger polling stays suspended until the whole correction has finished.
+; Those two answers mean very different things, and nothing else distinguishes
+; them from outside.
+global dustShoeFires = 0
+
 ; Tried and disproved: a second movement queue does not fix the lag.
 ;
 ; The theory was that the shoe waits because trigger2.g's G1 goes on the end of

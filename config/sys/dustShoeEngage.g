@@ -6,6 +6,8 @@ var targetU = {max(move.axes[3].min - var.uOffset, min(global.dustShoeEngagedU, 
 G1 U{var.targetU} F8000
 M400
 set global.dustShoePrevZ   = move.axes[2].machinePosition
+if {exists(global.dustShoeFires)}
+	set global.dustShoeFires = 0
 if {exists(global.dustShoeSaturated)}
 	set global.dustShoeSaturated = false
 set global.dustShoeEngaged = true
