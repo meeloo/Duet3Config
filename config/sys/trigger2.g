@@ -21,6 +21,19 @@
 if {state.status == "halted" || state.status == "off"}
 	M99
 
+; Move the shoe in its own movement queue, so it moves WHILE Z does.
+;
+; Without this the G1 below goes on the end of the same queue as the Z move
+; that fired the trigger, and a queue runs in order — so the shoe waited for
+; the whole Z move to finish before starting, however promptly the trigger
+; fired. That is what made the tracking feel nothing like real time, and no
+; amount of polling faster would have touched it.
+;
+; Skipped when the firmware has no second queue (see dustShoeConfig.g), where
+; it would only throw and abandon the tracking altogether.
+if {global.dustShoeQueue != 0}
+	M596 P{global.dustShoeQueue}
+
 ; The Z this move is compensating for, sampled once. Z is still moving, and
 ; taking it twice would compensate for one position and record another —
 ; leaving a permanent offset that never gets corrected.
@@ -39,6 +52,19 @@ var hiU   = {move.axes[3].max}
 var gotU  = {min(max(var.wantU, var.loU), var.hiU)}
 
 G53 G1 U{var.gotU} F8000
+
+; Wait for that move, then let go of U.
+;
+; Both halves matter. The wait is on THIS channel only — the job's Z carries on
+; in queue 0 — and it is what stops the trigger re-arming and stacking a second
+; correction on top of one still running.
+;
+; The release is what lets anything else have the axis: an axis is owned by the
+; motion system that moved it, so without this the shoe would keep U to itself
+; and dustShoeEngage.g, dustShoeRetract.g, homeu.g and the tool change would
+; all be waiting on a trigger to give it back.
+if {global.dustShoeQueue != 0}
+	M400 S0
 
 ; Only what was actually achieved. Recording the Z we wanted to reach while U
 ; was clamped short of it would tell the next firing that the shoe is caught
