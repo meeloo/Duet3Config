@@ -1,6 +1,11 @@
 ; homeu.g
 ; called to home the U axis (Dust Shoe)
 
+; Let the dust shoe go first — see the note in homeall.g. U is the follower, so
+; without this the `G1 H1` below is asking the axis to seek an endstop while
+; something else holds it to Z.
+M98 P"dustShoeRelease.g" S1
+
 G91 ; relative positioning
 G21 ; Set units to mm
 G1 H1 U{move.axes[3].max*2} F900 ; move quickly to axis endstop and stop there (first pass)
@@ -14,11 +19,12 @@ G90 ; absolute positioning
 ;
 ; "Once a motion system starts using an axis or extruder, it owns it until it
 ; is released, usually with M400" — so homing U claims the axis for whichever
-; motion system ran this file, and keeps it. The dust shoe's tracking runs in a
-; different motion system if it is ever run there again, and without this line
-; its first correction fails with "Drive U is already used by a different
-; motion system" and the shoe stops following Z until the next reboot.
+; motion system ran this file, and keeps it. Without this line the next thing
+; that wants U fails with "Drive U is already used by a different motion
+; system", and the shoe stops following Z until the next reboot.
 ;
+; Learned from the trigger, which ran in its own motion system, and kept for
+; M604, which has to be able to take the axis when the shoe is engaged again.
 ; Harmless with a single motion system: M400 is then just a wait.
 M400
 

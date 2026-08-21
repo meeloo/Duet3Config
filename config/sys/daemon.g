@@ -1,9 +1,10 @@
 ; daemon.g — nothing to do.
 ;
 ; This file used to poll the dust shoe: a `while true` loop waking every 50ms
-; to ask whether Z had moved and to nudge U after it. The M581.1 expression
-; triggers in dustShoeConfig.g replaced it — the firmware watches the
-; expression itself and fires trigger2.g, which is both cheaper and sooner.
+; to ask whether Z had moved and to nudge U after it. An M581.1 expression
+; trigger replaced it, and M604 has since replaced that — the firmware holds U
+; to Z inside the motion planner, so there is nothing left to watch for. See
+; dustShoeConfig.g.
 ;
 ; The loop stayed behind as a fallback for RRF 3.6, which has no M581.1. It had
 ; to go, because it does not merely idle:

@@ -1,5 +1,11 @@
 ; trigger2.g — the dust shoe follows Z
 ;
+; NOT IN USE while dustShoeTracking is "m604". The firmware holds U to Z inside
+; the motion planner now, and this file's trigger is only registered when that
+; is switched back to "trigger" — which is there for a firmware without M604 and
+; nothing else. Everything below still works; it is simply always late, for the
+; reason set out in dustShoeConfig.g, and being late is what M604 fixed.
+;
 ; Fired by the M581.1 expression registered in dustShoeConfig.g, which is true
 ; whenever the shoe has fallen more than the deadband behind Z.
 ;

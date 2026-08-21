@@ -3,8 +3,16 @@
 ; The shoe hangs off the Z carriage on its own U axis. When engaged, U has to
 ; move opposite to Z so the bristles stay at a constant height above the work.
 ;
-; That tracking used to be a polling loop in daemon.g. On RRF 3.7 it is an
-; M581.1 expression trigger instead — see the note on dustShoeUseTrigger below.
+; That tracking has had three answers. A polling loop in daemon.g, then an
+; M581.1 expression trigger, and now M604 — which is the only one that works.
+; See dustShoeTracking below for which is in force and why the first two could
+; not have worked.
+;
+; global.dustShoeEngaged is the marker meaning "this machine has a dust shoe",
+; and it stays whatever the tracking mechanism is. The tool-change hooks in
+; tfree*.g and tpost*.g are written as `if {exists(global.dustShoeEngaged)}`, so
+; removing it in favour of asking the firmware would not move the state
+; somewhere better — it would stop the hooks firing at all.
 
 global dustShoeEngaged    = false
 global dustShoePrevZ      = move.axes[2].machinePosition
@@ -20,19 +28,50 @@ global dustShoeBand       = 0.1  ; mm
 ; Set when U runs out of travel and the shoe stops tracking. Cleared on engage.
 global dustShoeSaturated  = false
 
-; Which mechanism does the tracking.
+; Which mechanism does the tracking. One of "m604", "trigger" or "none".
 ;
-; true  — M581.1 expression triggers (RRF 3.7 and later). The firmware watches
-;         the expression and fires trigger2.g when it becomes true.
-; false — nothing. The polling loop this used to fall back to has been taken
-;         out of daemon.g: with the tracking in its own motion system, a second
-;         thing reaching for U from motion system 0 does not idle quietly, it
-;         reports "Drive U is already used by a different motion system" once
-;         per move for as long as the machine is on.
+; "m604" — the firmware holds U to Z inside the motion planner. The two become
+;          one coordinated move, so the shoe does not follow Z, it travels WITH
+;          it. Needs the meeloo/RepRapFirmware fork, branch feature/velocity-jog.
+;          M604 is a provisional command number there: free in that firmware but
+;          not blessed by Duet3D, so it may yet move.
 ;
-; So on a firmware without M581.1 there is now no tracking at all rather than a
-; slower kind. The loop is in daemon.g's history if it is ever needed back.
-global dustShoeUseTrigger = true
+; "trigger" — M581.1 expression triggers (RRF 3.7+) firing trigger2.g. Kept
+;          selectable, and kept only because it is the thing to fall back to on
+;          firmware without M604. It does not work well and cannot be made to:
+;          see below.
+;
+; "none" — no tracking. The shoe still engages, retracts and parks; it simply
+;          sits at a fixed height while Z moves.
+;
+; Why "trigger" cannot be fixed, so that nobody spends another week on it. The
+; expression reads move.axes[2].machinePosition, and the object model reports
+; where an axis IS, never where a move is GOING — machinePosition and
+; userPosition are both live and differ only by the work offset. So the trigger
+; cannot become true until Z has already moved, and the correction is always
+; late by construction. Measured: dustShoeFires said 1 for a whole 50mm jog,
+; with U ending clamped at its limit — one correction, attempting the entire
+; delta, arriving after Z had stopped. No dead band, trigger rate, motion system
+; or polling interval sits upstream of that.
+;
+; The polling loop that came before it is worse still and is not on this list:
+; with the tracking in its own motion system, a second claimant on U from motion
+; system 0 does not idle quietly, it reports "Drive U is already used by a
+; different motion system" once per move for as long as the machine is on. That
+; is why daemon.g is empty rather than deleted.
+global dustShoeTracking   = "m604"
+
+; Does this firmware have M581.1 expression triggers (RRF 3.7 and later)?
+;
+; Separate from the mechanism above because it is a separate fact, and because
+; one of the two triggers is worth having whichever mechanism is tracking: T3
+; reports the shoe running out of travel, which happens under M604 exactly as it
+; did under the trigger — the firmware clamps the follower to its M208 range and
+; leaves it resting on the stop while Z carries on.
+;
+; Set false on a firmware without M581.1, or registering the triggers below
+; fails at boot.
+global dustShoeHasTriggers = true
 
 ; Report what each firing of trigger2.g actually saw. Off by default — one line
 ; per correction is a lot of console. `set global.dustShoeDebug = true` turns it
@@ -126,11 +165,30 @@ global dustShoeFires = 0
 ; one. A shoe carried by the carriage above the Z travel needs no tracking and
 ; keeps U for parking alone.
 ;
-; Until then this is the resting state and it works: the shoe follows Z one
-; move behind, saturates gracefully with a message when it runs out of travel,
-; and retracts for tool changes exactly as it always did.
+; --- What actually fixed it -------------------------------------------------
+;
+; Everything above is the record of trying to make a WATCHER work, and the
+; conclusion that runs through all of it — the information is late, and nothing
+; downstream of late information can make it early — turned out to be the answer
+; rather than the obstacle. The one shape identified as workable was "U
+; travelling in the same G1 as Z, because that is the one place in RRF where two
+; axes are guaranteed to interpolate together", and it was rejected because it
+; needed every source of Z motion to emit the U term: the jog buttons, these
+; macros, and the Fusion post, any one of which could get it silently wrong.
+;
+; M604 is that shape, moved to where it only has to be right once. The
+; relationship is applied inside the motion planner, so every source of Z motion
+; gets it for free — including velocity jogging, which no post-processor could
+; have covered. Measured skew between the two step trains is 0.0000 ms at the
+; start, middle and end of a move.
+;
+; It is not the coupled-kinematics idea either, and does not inherit its
+; problem: the follower is a real axis clamped to its own M208 range, so a tool
+; change taking Z from 135 to 10 leaves the shoe resting on its stop rather than
+; dragging it 55mm past the end of its travel into a pocket. Trigger 3 below
+; still reports that, and it is still worth reporting.
 
-if {global.dustShoeUseTrigger}
+if {global.dustShoeHasTriggers && global.dustShoeTracking == "trigger"}
 	; Trigger 2: the shoe has fallen behind Z by more than the dead band.
 	;
 	; Re-arming is the whole trick. M581.1 fires on a false→true edge, so this
@@ -142,7 +200,16 @@ if {global.dustShoeUseTrigger}
 	; Z while jogging by hand just as much as during a job.
 	M581.1 T2 P"global.dustShoeEngaged && move.axes[3].homed && abs(move.axes[2].machinePosition - global.dustShoePrevZ) > global.dustShoeBand" R0
 
-	; Trigger 3: U has hit a limit while engaged, so tracking has stopped.
-	; Guarded on dustShoeSaturated being false so it reports the transition
-	; once rather than on every re-evaluation while the axis sits on its stop.
+; Trigger 3: U has hit a limit while engaged, so the shoe has stopped tracking.
+;
+; Registered whichever mechanism is doing the tracking — the M604 firmware
+; clamps the follower to its M208 range just as trigger2.g did, so the shoe runs
+; out of travel in exactly the same places and the operator needs telling in
+; exactly the same way. It is not a corner case here: Z travels 0..135 and U
+; travels 0..70, so any Z move longer than 70mm exhausts the shoe by
+; construction, and pause.g lifts Z to its maximum.
+;
+; Guarded on dustShoeSaturated being false so it reports the transition once
+; rather than on every re-evaluation while the axis sits on its stop.
+if {global.dustShoeHasTriggers && global.dustShoeTracking != "none"}
 	M581.1 T3 P"global.dustShoeEngaged && !global.dustShoeSaturated && (move.axes[3].machinePosition <= move.axes[3].min + 0.2 || move.axes[3].machinePosition >= move.axes[3].max - 0.2)" R0

@@ -20,7 +20,29 @@ echo "Start probing Z for current tool from " ^ {move.axes[2].machinePosition}
 M585 Z{-(global.atcRetractZ - global.atcProbeZ)} P0 F500 S1 ; Reach for the probe
 var newOffset = {-(move.axes[2].machinePosition - global.atcProbeZ)}
 echo "Probed tool at " ^ {move.axes[2].machinePosition} ^ " New offset = " ^ {var.newOffset} ^ " (Z Probe height = " ^ {global.atcProbeZ} ^ ")"
-G10 L1 Z{var.newOffset} U{-var.newOffset} ; Set Tool offset to the distance in between the current Z position and the probe Z position. Also update the U axis with the inverse of that offset so that the dust shoe also move accordingly
+; Set the tool offset to the distance between the current Z position and the
+; probe Z position.
+;
+; The dust shoe used to get a U term here — the inverse of the same offset. It
+; did not move the shoe; it shifted U's WORK coordinate so that
+; dustShoeEngage.g's fixed work-coordinate target landed at a machine position
+; corrected for tool length. Under M604 the firmware holds U to Z in MACHINE
+; coordinates and after tool offsets, so a longer tool raises the carriage and
+; the shoe comes down by exactly as much on its own, and the term does nothing.
+;
+; Conditional rather than deleted: it is still what keeps the shoe level on a
+; firmware without M604, and dropping it there is silent — valid G-code, machine
+; runs, bristles at the wrong height for every tool but the one they were set
+; with.
+; Nested, not `exists(...) && ...` — see the note in dustShoeRelease.g.
+var shoeInFirmware = false
+if {exists(global.dustShoeTracking)}
+	set var.shoeInFirmware = {global.dustShoeTracking == "m604"}
+
+if {var.shoeInFirmware}
+	G10 L1 Z{var.newOffset}
+else
+	G10 L1 Z{var.newOffset} U{-var.newOffset}
 
 G53 G0 Z{global.atcRetractZ} 					; Raise Head
 

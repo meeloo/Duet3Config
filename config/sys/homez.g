@@ -1,6 +1,11 @@
 ; homez.g
 ; called to home the Z axis
 
+; Let the dust shoe go first — see the note in homeall.g. Z is the leader, so
+; homing it is precisely the case where a captured relationship stops meaning
+; anything.
+M98 P"dustShoeRelease.g" S1
+
 G91 ; relative positioning
 G21 ; Set units to mm
 G1 H1 Z{move.axes[2].max*2} F900 ; move quickly to Z axis endstop and stop there (first pass)
